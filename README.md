@@ -18,6 +18,9 @@ Everything is **backed up and reversible**, with an automatic **restore point** 
 - 🧰 **25 tweaks**: gaming, performance, visual, network, privacy, advanced, actions
 - 📊 Optimization **score & grade**, live CPU/RAM graphs, system tray
 - ⚡ **Beast Mode**: dedicated power plan that unleashes 100% hardware power (CPU max, aggressive turbo, no core parking, no USB/PCIe/Wi-Fi saving, no sleep)
+- 🌐 **Internet page**: real ping/download/upload speed test (Cloudflare) with progress, cancel and gaming grade, public IP display, one-click gaming DNS (Cloudflare/Google/restore)
+- 🤖 **Auto-boost watcher**: library games are boosted automatically whenever they start
+- 🖥️ **Resolution switcher**: quick display resolution change with native detection
 - 🛡️ Restore point + full backup (`backup.json`) + one-click **Undo everything**
 
 ## Download & Run
@@ -31,7 +34,7 @@ Everything is **backed up and reversible**, with an automatic **restore point** 
 
 No installation, no dependencies — single portable `.exe` for Windows 10/11 x64.
 
-## The 25 optimizations
+## The 27 optimizations
 
 | # | Optimization | Mode |
 |---|---|---|
@@ -60,6 +63,8 @@ No installation, no dependencies — single portable `.exe` for Windows 10/11 x6
 | 23 | Forced HPET removed (BCD) | advanced · restart |
 | 24 | Dynamic tick disabled (BCD) | advanced · restart |
 | 25 | GPU MSI mode | advanced · restart |
+| 26 | Skip lock screen | recommended |
+| 27 | Activity history OFF | recommended |
 
 Per-game extras: high-performance GPU preference, fullscreen-optimization toggle,
 CPU priority & affinity, launch options, auto-close list, session power/timer boost.
@@ -120,6 +125,9 @@ MIT — see [LICENSE](LICENSE).
 - 🧰 **۲۵ توییک**: گیمینگ، کارایی، ظاهری، شبکه، حریم خصوصی، پیشرفته، اقدامات
 - 📊 **امتیاز و رتبه** بهینه‌سازی، نمودار زنده، سینی سیستم
 - ⚡ **حالت حداکثر توان (Beast Mode)**: پلن انرژی اختصاصی که ۱۰۰٪ توان سخت‌افزار را آزاد می‌کند (حداکثر CPU، توربو تهاجمی، بدون پارک هسته، بدون صرفه‌جویی USB/PCIe/وای‌فای، بدون خواب)
+- 🌐 **صفحه اینترنت**: تست واقعی سرعت پینگ/دانلود/آپلود (کلادفلر) با پیشرفت، انصراف و رتبه گیمینگ، نمایش آی‌پی عمومی، DNS گیمینگ با یک کلیک (کلادفلر/گوگل/بازگردانی)
+- 🤖 **بوست خودکار**: بازی‌های کتابخانه هنگام اجرا خودکار بوست می‌شوند
+- 🖥️ **تعویض رزولوشن**: تغییر سریع رزولوشن نمایشگر با تشخیص پیش‌فرض
 - 🛡️ نقطه بازیابی + بکاپ کامل + **بازگردانی همه با یک کلیک**
 
 ## دانلود و اجرا

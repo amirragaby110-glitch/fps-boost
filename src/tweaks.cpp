@@ -550,6 +550,39 @@ static bool RvDynTick() {
         }
     BkUnlock(); return false;
 }
+// --- 26. No lock screen ---
+static int CkNoLock() {
+    DWORD v = 0;
+    if (!RegGetDword(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Policies\\Microsoft\\Windows\\Personalization", L"NoLockScreen", v)) return 0;
+    return v == 1 ? 1 : 0;
+}
+static bool ApNoLock() {
+    return BSetD(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Policies\\Microsoft\\Windows\\Personalization", L"NoLockScreen", 1);
+}
+static bool RvNoLock() {
+    const wchar_t* s[] = {L"SOFTWARE\\Policies\\Microsoft\\Windows\\Personalization"};
+    const wchar_t* n[] = {L"NoLockScreen"};
+    return RevertKeys(HKEY_LOCAL_MACHINE, s, n, 1);
+}
+// --- 27. Activity history off ---
+static const wchar_t* kActSub[] = {
+    L"SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+    L"SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+    L"SOFTWARE\\Policies\\Microsoft\\Windows\\System"};
+static const wchar_t* kActName[] = {L"EnableActivityFeed", L"PublishUserActivities", L"UploadUserActivities"};
+static int CkActHist() {
+    for (int i = 0; i < 3; i++) {
+        DWORD v = 1;
+        if (!RegGetDword(HKEY_LOCAL_MACHINE, kActSub[i], kActName[i], v) || v != 0) return 0;
+    }
+    return 1;
+}
+static bool ApActHist() {
+    for (int i = 0; i < 3; i++)
+        if (!BSetD(HKEY_LOCAL_MACHINE, kActSub[i], kActName[i], 0)) return false;
+    return true;
+}
+static bool RvActHist() { return RevertKeys(HKEY_LOCAL_MACHINE, kActSub, kActName, 3); }
 // --- 25. GPU MSI mode ---
 static bool EnumDisplayPci(std::vector<std::wstring>& paths) {
     paths.clear();
@@ -735,6 +768,16 @@ static const Tweak kTweaks[] = {
  "Enables message-signaled interrupts for the GPU. Needs restart.",
  "وقفه پیام‌محور گرافیک را فعال می‌کند. نیاز به ری‌استارت دارد.",
  TCAT_ADV, false, true, false, CkMsiGpu, ApMsiGpu, RvMsiGpu},
+{"nolockscreen",
+ "Skip lock screen", "رد شدن از لاک‌اسکرین",
+ "Goes straight to login, no lock screen delay.",
+ "بدون معطلی لاک‌اسکرین مستقیم به ورود می‌روید.",
+ TCAT_PERF, true, false, false, CkNoLock, ApNoLock, RvNoLock},
+{"activityhist",
+ "Disable activity history", "خاموش کردن تاریخچه فعالیت",
+ "Stops Windows from logging and uploading your activity.",
+ "ثبت و آپلود فعالیت شما توسط ویندوز متوقف می‌شود.",
+ TCAT_PRIV, true, false, false, CkActHist, ApActHist, RvActHist},
 };
 
 const std::vector<Tweak>& Tweaks_All() {

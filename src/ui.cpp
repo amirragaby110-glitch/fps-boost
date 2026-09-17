@@ -1,4 +1,4 @@
-// FPS Booster Pro - User interface (dark theme, sidebar, 7 pages)
+// FPS Booster Pro - User interface (dark theme, sidebar, 9 pages)
 #include "app.h"
 #include <commdlg.h>
 #include <gdiplus.h>
@@ -56,10 +56,11 @@ void Settings_Load() {
     g_lastScore = root.num("score", 0);
     g_beastGuid = root.wstr("beast");
     g_beastPrev = root.wstr("beastprev");
+    g_autoBoost = root.num("autoboost", 0) != 0;
 }
 void Settings_Save() {
     char nb[128];
-    snprintf(nb, 128, "{\"lang\":%d,\"tray\":%d,\"score\":%d", Strings_GetLang(), g_closeToTray?1:0, g_lastScore);
+    snprintf(nb, 128, "{\"lang\":%d,\"tray\":%d,\"score\":%d,\"autoboost\":%d", Strings_GetLang(), g_closeToTray?1:0, g_lastScore, g_autoBoost?1:0);
     std::string j = nb;
     j += ",\"lastBoost\":\"" + JsonEscapeW(g_lastBoost) + "\"}";
     j += ",\"beast\":\"" + JsonEscapeW(g_beastGuid) + "\",\"beastprev\":\"" + JsonEscapeW(g_beastPrev) + "\"}";
@@ -179,6 +180,7 @@ static const wchar_t* NavText(int page) {
     case PAGE_SYSTEM: return T(SID_NAV_SYSTEM);
     case PAGE_HELP: return T(SID_NAV_HELP);
     case PAGE_POWER: return T(SID_NAV_POWER);
+    case PAGE_NET: return T(SID_NAV_NET);
     default: return T(SID_NAV_SETTINGS);
     }
 }
@@ -388,6 +390,7 @@ static void GamesStorePanel() {
     Games_Save();
     Games_ApplyPersistent(snap);
 }
+static HWND hGamesAuto = NULL, hGamesAutoSt = NULL;
 static void BuildGames(HWND p) {
     hGamesList = MkList(p, IDC_G_LIST, 0, 0, 892, 236);
     int ids[] = {SID_G_COL_NAME, SID_G_COL_PATH, SID_G_COL_PLAYS, SID_G_COL_LAST};
@@ -420,6 +423,10 @@ static void BuildGames(HWND p) {
     hGamesLaunch = MkCTA(p, IDC_G_LAUNCH, 0, 506, 300, 54, SID_G_LAUNCH);
     hGamesStatus = MkLabel(p, 320, 512, 572, 26, g_hFontBig);
     hGamesTip = MkLabel(p, 320, 540, 572, 40);
+    hGamesAuto = MkCheck(p, IDC_G_AUTO, 0, 588, 560, SID_G_AUTO);
+    SetChecked(hGamesAuto, g_autoBoost);
+    hGamesAutoSt = MkLabel(p, 570, 588, 322, 26);
+    if (g_autoBoost) SetLabel(hGamesAutoSt, T(SID_G_AUTO_WATCH), COL_MUTED);
 }
 
 // ---------- Boost ----------
@@ -494,6 +501,7 @@ static void BuildTweaks(HWND p) {
 }
 
 // ---------- System ----------
+static HWND hSysRes = NULL;
 static void SysRefresh() {
     if (!g_meter) g_meter = new CpuMeter();
     int cpu = g_meter->sample();
@@ -523,6 +531,19 @@ static void BuildSystem(HWND p) {
     MkButton(p, IDC_S_CLEANRAM, 0, 416, 220, 38, SID_S_CLEAN_RAM);
     MkButton(p, IDC_S_CLEANTEMP, 232, 416, 220, 38, SID_S_CLEAN_TEMP);
     MkButton(p, IDC_S_REFRESH, 464, 416, 240, 38, SID_S_MAXREFRESH);
+    HWND lr = MkLabel(p, 0, 466, 130, 28); SetWindowTextW(lr, T(SID_S_RES));
+    hSysRes = MkCombo(p, IDC_S_RES, 140, 464, 200);
+    const wchar_t* res[] = {L"1280x720", L"1366x768", L"1600x900", L"1920x1080", L"2560x1440", L"3840x2160"};
+    int cw = 0, chh = 0; GetCurrentResolution(cw, chh);
+    int sel = 3;
+    for (int i = 0; i < 6; i++) {
+        SendMessageW(hSysRes, CB_ADDSTRING, 0, (LPARAM)res[i]);
+        int w2 = 0, h2 = 0;
+        if (swscanf(res[i], L"%dx%d", &w2, &h2) == 2 && w2 == cw && h2 == chh) sel = i;
+    }
+    SendMessageW(hSysRes, CB_SETCURSEL, sel, 0);
+    MkButton(p, IDC_S_RESAPPLY, 352, 464, 130, 32, SID_S_RES_APPLY);
+    MkButton(p, IDC_S_RESNATIVE, 494, 464, 130, 32, SID_S_RES_NATIVE);
 }
 
 // ---------- Help ----------
@@ -562,7 +583,15 @@ static const char* kHelpEN =
 "  max CPU speed, aggressive turbo, no core parking, no USB/PCIe/Wi-Fi\r\n"
 "  saving, display and sleep set to Never while plugged in.\r\n"
 "- One click activates it, one click restores your previous plan.\r\n"
-"- You can also apply all settings to your current plan instead.\r\n";
+"- You can also apply all settings to your current plan instead.\r\n"
+"\r\n7) INTERNET (SPEED TEST + DNS)\r\n"
+"- Internet page: real ping, download and upload test with gaming grade.\r\n"
+"- Public IP is shown automatically after the test.\r\n"
+"- One-click gaming DNS: Cloudflare 1.1.1.1 or Google 8.8.8.8.\r\n"
+"- Automatic (restore) brings back your original DNS.\r\n"
+"\r\n8) AUTO-BOOST + DISPLAY\r\n"
+"- My Games: enable Auto-boost to speed up library games on launch.\r\n"
+"- System page: quick resolution switcher (Native = recommended).\r\n";
 static const char* kHelpFA =
 "راهنمای FPS BOOSTER PRO\r\n"
 "================================\r\n\r\n"
@@ -598,7 +627,15 @@ static const char* kHelpFA =
 "- صفحه پاور یک پلن اختصاصی می‌سازد که ۱۰۰٪ توان سخت‌افزار را آزاد می‌کند:\r\n"
 "  حداکثر سرعت پردازنده، توربو تهاجمی، بدون پارک هسته، بدون صرفه‌جویی\r\n"
 "  USB/PCIe/وای‌فای، نمایشگر و خواب روی Never.\r\n"
-"- با یک کلیک فعال و با یک کلیک به پلن قبلی برمی‌گردد.\r\n";
+"- با یک کلیک فعال و با یک کلیک به پلن قبلی برمی‌گردد.\r\n"
+"\r\n۷) اینترنت (تست سرعت + DNS)\r\n"
+"- صفحه اینترنت: تست واقعی پینگ، دانلود و آپلود با رتبه گیمینگ.\r\n"
+"- آی‌پی عمومی بعد از تست خودکار نمایش داده می‌شود.\r\n"
+"- DNS گیمینگ با یک کلیک: کلادفلر 1.1.1.1 یا گوگل 8.8.8.8.\r\n"
+"- گزینه خودکار DNS اصلی شما را برمی‌گرداند.\r\n"
+"\r\n۸) بوست خودکار + نمایشگر\r\n"
+"- در بازی‌ها: بوست خودکار بازی‌های کتابخانه هنگام اجرا.\r\n"
+"- صفحه سیستم: تعویض سریع رزولوشن (Native = پیشنهادی).\r\n";
 static void BuildHelp(HWND p) {
     hHelpText = MkEdit(p, IDC_H_TEXT, 0, 0, 892, 590, true, true);
     SetWindowTextW(hHelpText, Utf8ToWide(Strings_GetLang() == 1 ? kHelpFA : kHelpEN).c_str());
@@ -674,6 +711,46 @@ static void BuildPower(HWND p) {
     MkButton(p, IDC_P_DELETE, 460, 532, 200, 36, SID_P_DELETE);
 }
 
+// ---------- Internet ----------
+static HWND hNetStatus = NULL, hNetProg = NULL, hNetPing = NULL, hNetDown = NULL;
+static HWND hNetUp = NULL, hNetIp = NULL, hNetGrade = NULL, hNetDnsSt = NULL;
+static HWND hNetStart = NULL, hNetCancel = NULL;
+static void NetRefresh() {
+    if (!hNetDnsSt) return;
+    SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_TEXT);
+    bool busy = NetTestBusy();
+    EnableWindow(hNetStart, busy ? FALSE : TRUE);
+    EnableWindow(hNetCancel, busy ? TRUE : FALSE);
+}
+static void BuildNet(HWND p) {
+    hNetStatus = MkLabel(p, 0, 4, 700, 26, g_hFontBig);
+    SetLabel(hNetStatus, T(SID_STATUS_READY), COL_TEXT);
+    HWND srv = MkLabel(p, 0, 32, 400, 24); SetLabel(srv, T(SID_N_SERVER), COL_MUTED);
+    hNetProg = Mk(p, PROGRESS_CLASSW, L"", WS_CHILD | WS_VISIBLE | PBS_SMOOTH, 0,
+        0, 60, 892, 26, IDC_N_PROG, NULL);
+    SendMessageW(hNetProg, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
+    hNetPing = MkLabel(p, 0, 96, 200, 34, g_hFontBig);
+    hNetDown = MkLabel(p, 220, 96, 300, 34, g_hFontBig);
+    hNetUp = MkLabel(p, 540, 96, 300, 34, g_hFontBig);
+    SetLabel(hNetPing, WFormat(L"%s: --", T(SID_N_PING)), COL_TEXT);
+    SetLabel(hNetDown, WFormat(L"%s: --", T(SID_N_DOWN)), COL_TEXT);
+    SetLabel(hNetUp, WFormat(L"%s: --", T(SID_N_UP)), COL_TEXT);
+    hNetIp = MkLabel(p, 0, 136, 440, 26);
+    SetLabel(hNetIp, WFormat(L"%s: ...", T(SID_N_IP)), COL_MUTED);
+    hNetGrade = MkLabel(p, 452, 132, 440, 34, g_hFontBig);
+    SetLabel(hNetGrade, WFormat(L"%s: --", T(SID_N_GRADE)), COL_TEXT);
+    hNetStart = MkCTA(p, IDC_N_START, 0, 176, 300, 54, SID_N_START);
+    hNetCancel = MkButton(p, IDC_N_CANCEL, 320, 176, 200, 54, SID_N_CANCEL);
+    EnableWindow(hNetCancel, FALSE);
+    MkHeader(p, 0, 248, 400, SID_N_DNS_T);
+    hNetDnsSt = MkLabel(p, 0, 278, 892, 26);
+    HWND cf = MkButton(p, IDC_N_CF, 0, 310, 280, 38, SID_N_DNS_CF);
+    HWND gg = MkButton(p, IDC_N_GOOG, 300, 310, 280, 38, SID_N_DNS_GOOG);
+    HWND au = MkButton(p, IDC_N_AUTO, 600, 310, 292, 38, SID_N_DNS_AUTO);
+    if (!g_isAdmin) { EnableWindow(cf, FALSE); EnableWindow(gg, FALSE); EnableWindow(au, FALSE); }
+    SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_TEXT);
+}
+
 // ---------- Page management ----------
 static const int kPageOfNav[PAGE_COUNT] = {0, 1, 2, 3, 4, 5, 6};
 void UI_ShowPage(int page) {
@@ -682,8 +759,8 @@ void UI_ShowPage(int page) {
     for (int i = 0; i < PAGE_COUNT; i++)
         ShowWindow(g_hPages[i], i == page ? SW_SHOW : SW_HIDE);
     static StrId titles[] = {SID_NAV_DASH, SID_NAV_GAMES, SID_NAV_BOOST, SID_NAV_TWEAKS,
-                             SID_NAV_SYSTEM, SID_NAV_HELP, SID_NAV_SETTINGS, SID_NAV_POWER};
-    static StrId subs[] = {SID_DASH_SUB, SID_G_SUB, SID_B_SUB, SID_T_SUB, SID_S_SUB, SID_H_SUB, SID_SET_SUB, SID_P_SUB};
+                             SID_NAV_SYSTEM, SID_NAV_HELP, SID_NAV_SETTINGS, SID_NAV_POWER, SID_NAV_NET};
+    static StrId subs[] = {SID_DASH_SUB, SID_G_SUB, SID_B_SUB, SID_T_SUB, SID_S_SUB, SID_H_SUB, SID_SET_SUB, SID_P_SUB, SID_N_SUB};
     SetWindowTextW(hTitle, WFormat(L"%s   -   %s", T(titles[page]), T(subs[page])).c_str());
     InvalidateRect(hSide, NULL, TRUE);
     for (int i = 0; i < PAGE_COUNT; i++) {
@@ -696,6 +773,7 @@ void UI_ShowPage(int page) {
     case PAGE_TWEAKS: TweaksFillList(); TweaksShowDetail(-1); break;
     case PAGE_SYSTEM: SysRefresh(); break;
     case PAGE_POWER: PowRefresh(); break;
+    case PAGE_NET: NetRefresh(); break;
     }
 }
 void UI_RefreshAll() {
@@ -1006,6 +1084,19 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         case IDC_G_KILL:
             if (code == EN_CHANGE) GamesStorePanel();
             break;
+        case IDC_G_AUTO:
+            if (code == BN_CLICKED) {
+                HWND b = (HWND)l;
+                SetChecked(b, !IsChecked(b));
+                InvalidateRect(b, NULL, TRUE);
+                g_autoBoost = IsChecked(b);
+                Settings_Save();
+                if (g_autoBoost) AutoBoostStart(g_hMain);
+                else AutoBoostStop();
+                if (g_autoBoost) SetLabel(hGamesAutoSt, T(SID_G_AUTO_WATCH), COL_MUTED);
+                else SetLabel(hGamesAutoSt, L"", COL_MUTED);
+            }
+            break;
         case IDC_G_GPUPREF: case IDC_G_FSO: case IDC_G_TIMER: case IDC_G_POWER:
             if (code == BN_CLICKED) {
                 HWND b = (HWND)l;
@@ -1095,6 +1186,28 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
                 WFormat(L"%s %dHz", T(SID_S_REFRESH_DONE), hz).c_str() : T(SID_S_REFRESH_NONE));
             break;
         }
+        case IDC_S_RESAPPLY: {
+            int si = (int)SendMessageW(hSysRes, CB_GETCURSEL, 0, 0);
+            wchar_t b[64]; b[0] = 0;
+            SendMessageW(hSysRes, CB_GETLBTEXT, si, (LPARAM)b);
+            int w2 = 0, h2 = 0;
+            if (swscanf(b, L"%dx%d", &w2, &h2) == 2 && SetDisplayResolution(w2, h2))
+                SetWindowTextW(hStatusBar, T(SID_B_DONE));
+            else
+                SetWindowTextW(hStatusBar, T(SID_B_FAIL));
+            break;
+        }
+        case IDC_S_RESNATIVE: {
+            int w2 = 0, h2 = 0;
+            if (GetNativeResolution(w2, h2) && SetDisplayResolution(w2, h2)) {
+                wchar_t b[64];
+                swprintf(b, 64, L"%dx%d", w2, h2);
+                int si = (int)SendMessageW(hSysRes, CB_FINDSTRINGEXACT, (WPARAM)-1, (LPARAM)b);
+                if (si >= 0) SendMessageW(hSysRes, CB_SETCURSEL, si, 0);
+                SetWindowTextW(hStatusBar, T(SID_B_DONE));
+            } else SetWindowTextW(hStatusBar, T(SID_B_FAIL));
+            break;
+        }
         case IDC_SET_LANG:
             if (code == CBN_SELCHANGE)
                 SetLangAndAsk((int)SendMessageW(hSetLang, CB_GETCURSEL, 0, 0));
@@ -1152,6 +1265,31 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             break;
         case IDC_P_DELETE:
             if (!g_boosting && !Games_IsBusy()) { BeastDelete(); PowRefresh(); }
+            break;
+        case IDC_N_START:
+            if (!NetTestBusy()) {
+                SetLabel(hNetStatus, T(SID_N_TESTING), COL_YELLOW);
+                SetLabel(hNetPing, WFormat(L"%s: ...", T(SID_N_PING)), COL_TEXT);
+                SetLabel(hNetDown, WFormat(L"%s: ...", T(SID_N_DOWN)), COL_TEXT);
+                SetLabel(hNetUp, WFormat(L"%s: ...", T(SID_N_UP)), COL_TEXT);
+                SetLabel(hNetGrade, WFormat(L"%s: --", T(SID_N_GRADE)), COL_TEXT);
+                SendMessageW(hNetProg, PBM_SETPOS, 0, 0);
+                EnableWindow(hNetStart, FALSE);
+                EnableWindow(hNetCancel, TRUE);
+                NetTestRun(g_hMain);
+            }
+            break;
+        case IDC_N_CANCEL:
+            NetTestCancel();
+            break;
+        case IDC_N_CF:
+            if (DnsSetPreset(1)) SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_GREEN);
+            break;
+        case IDC_N_GOOG:
+            if (DnsSetPreset(2)) SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_GREEN);
+            break;
+        case IDC_N_AUTO:
+            if (DnsSetPreset(0)) SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_GREEN);
             break;
         case IDM_TRAY_OPEN:
             UI_TrayShow(true);
@@ -1253,6 +1391,51 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         if (info) delete[] info;
         break;
     }
+    case WM_APP_NET: {
+        int phase = (int)w;
+        if (phase == 0) SetLabel(hNetPing, WFormat(L"%s: %d ms", T(SID_N_PING), (int)l), COL_GREEN);
+        else if (phase == 1) {
+            double* d = (double*)l;
+            if (d) { SetLabel(hNetDown, WFormat(L"%s: %.1f Mbps", T(SID_N_DOWN), *d), COL_TEXT); delete d; }
+            SendMessageW(hNetProg, PBM_SETPOS, 30, 0);
+        }
+        else if (phase == 2) SendMessageW(hNetProg, PBM_SETPOS, 55, 0);
+        else if (phase == 3) {
+            double* d = (double*)l;
+            if (d) { SetLabel(hNetUp, WFormat(L"%s: %.1f Mbps", T(SID_N_UP), *d), COL_TEXT); delete d; }
+            SendMessageW(hNetProg, PBM_SETPOS, 80, 0);
+        }
+        else if (phase == 4) SendMessageW(hNetProg, PBM_SETPOS, 90, 0);
+        else if (phase == 5) {
+            wchar_t* ip = (wchar_t*)l;
+            if (ip) { SetLabel(hNetIp, WFormat(L"%s: %s", T(SID_N_IP), ip), COL_TEXT); delete[] ip; }
+        }
+        else if (phase == 6) {
+            static StrId g[] = {SID_N_GR0, SID_N_GR1, SID_N_GR2, SID_N_GR3};
+            static COLORREF c[] = {COL_GREEN, COL_GREEN, COL_YELLOW, COL_RED};
+            int gi = (int)l;
+            if (gi < 0) gi = 0; if (gi > 3) gi = 3;
+            SetLabel(hNetGrade, WFormat(L"%s: %s", T(SID_N_GRADE), T(g[gi])), c[gi]);
+            SetLabel(hNetStatus, T(SID_B_DONE), COL_GREEN);
+            SendMessageW(hNetProg, PBM_SETPOS, 100, 0);
+            EnableWindow(hNetStart, TRUE);
+            EnableWindow(hNetCancel, FALSE);
+        }
+        else if (phase == 7) {
+            SetLabel(hNetStatus, T(SID_N_ERR), COL_RED);
+            EnableWindow(hNetStart, TRUE);
+            EnableWindow(hNetCancel, FALSE);
+        }
+        break;
+    }
+    case WM_APP_AUTO: {
+        wchar_t* names = (wchar_t*)l;
+        int count = (int)w;
+        if (count <= 0) SetLabel(hGamesAutoSt, T(SID_G_AUTO_WATCH), COL_MUTED);
+        else SetLabel(hGamesAutoSt, WFormat(L"%s %s", T(SID_G_AUTO_BOOST), names ? names : L""), COL_GREEN);
+        if (names) delete[] names;
+        break;
+    }
     case WM_APP_TRAY:
         if (l == WM_LBUTTONDBLCLK) UI_TrayShow(true);
         else if (l == WM_RBUTTONUP) {
@@ -1300,6 +1483,7 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         MoveWindow(GetDlgItem(g_hPages[PAGE_SYSTEM], IDC_S_CLEANTEMP), S(232), ph - S(100), S(220), S(38), TRUE);
         MoveWindow(GetDlgItem(g_hPages[PAGE_SYSTEM], IDC_S_REFRESH), S(464), ph - S(100), S(240), S(38), TRUE);
         MoveWindow(hHelpText, 0, 0, pw, ph - S(8), TRUE);
+        MoveWindow(hNetProg, 0, S(60), pw, S(26), TRUE);
         MoveWindow(hPowList, 0, S(140), pw, ph - S(140) - S(60), TRUE);
         MoveWindow(GetDlgItem(g_hPages[PAGE_POWER], IDC_P_APPLYALL), 0, ph - S(48), S(240), S(36), TRUE);
         MoveWindow(GetDlgItem(g_hPages[PAGE_POWER], IDC_P_RESTORE), S(250), ph - S(48), S(200), S(36), TRUE);
@@ -1384,7 +1568,7 @@ bool UI_Create(HINSTANCE hInst) {
         0, 0, S(240), H, g_hMain, NULL, hInst, NULL);
     for (int i = 0; i < PAGE_COUNT; i++) {
         HWND b = CreateWindowExW(0, WC_BUTTONW, NavText(i), WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
-            S(14), S(266) + i * S(52), S(212), S(46), hSide, (HMENU)(INT_PTR)(IDC_NAV_BASE + i), hInst, NULL);
+            S(14), S(258) + i * S(49), S(212), S(43), hSide, (HMENU)(INT_PTR)(IDC_NAV_BASE + i), hInst, NULL);
         SendMessageW(b, WM_SETFONT, (WPARAM)g_hFont, 0);
     }
 
@@ -1407,6 +1591,7 @@ bool UI_Create(HINSTANCE hInst) {
     BuildHelp(g_hPages[PAGE_HELP]);
     BuildSettings(g_hPages[PAGE_SETTINGS]);
     BuildPower(g_hPages[PAGE_POWER]);
+    BuildNet(g_hPages[PAGE_NET]);
 
     hStatusBar = Mk(g_hMain, WC_STATICW, T(SID_STATUS_READY), WS_CHILD | WS_VISIBLE | SS_LEFT, 0,
         240, 730, 900, 30, 0, g_hFont);

@@ -37,9 +37,11 @@
 #define WM_APP_GAME       (WM_APP + 13)
 #define WM_APP_TRAY       (WM_APP + 14)
 #define WM_APP_REFRESH    (WM_APP + 15)
+#define WM_APP_NET        (WM_APP + 16)
+#define WM_APP_AUTO       (WM_APP + 17)
 
 // Pages
-enum PageId { PAGE_DASH = 0, PAGE_GAMES, PAGE_BOOST, PAGE_TWEAKS, PAGE_SYSTEM, PAGE_HELP, PAGE_SETTINGS, PAGE_POWER, PAGE_COUNT };
+enum PageId { PAGE_DASH = 0, PAGE_GAMES, PAGE_BOOST, PAGE_TWEAKS, PAGE_SYSTEM, PAGE_HELP, PAGE_SETTINGS, PAGE_POWER, PAGE_NET, PAGE_COUNT };
 
 // Tweak categories
 enum TweakCat { TCAT_GAMING = 0, TCAT_PERF, TCAT_VISUAL, TCAT_NET, TCAT_PRIV, TCAT_ADV, TCAT_ACT };
@@ -61,6 +63,7 @@ enum CtrlId {
     IDC_G_PRIO, IDC_G_AFF, IDC_G_GPUPREF, IDC_G_FSO,
     IDC_G_ARGS, IDC_G_TIMER, IDC_G_POWER, IDC_G_KILL,
     IDC_G_LAUNCH, IDC_G_STATUS, IDC_G_TIP,
+    IDC_G_AUTO = 415, IDC_G_AUTOST,
     // boost
     IDC_B_START = 500, IDC_B_UNDO, IDC_B_PROG, IDC_B_LOG,
     // tweaks
@@ -69,6 +72,7 @@ enum CtrlId {
     // system
     IDC_S_CPU = 700, IDC_S_RAM, IDC_S_UPTIME, IDC_S_TIMER,
     IDC_S_GRAPH, IDC_S_CLEANRAM, IDC_S_CLEANTEMP, IDC_S_REFRESH,
+    IDC_S_RES = 708, IDC_S_RESAPPLY, IDC_S_RESNATIVE,
     // help
     IDC_H_TEXT = 800,
     // settings
@@ -77,6 +81,9 @@ enum CtrlId {
     // power page
     IDC_P_PLAN = 950, IDC_P_REFRESH, IDC_P_BEAST, IDC_P_STATUS, IDC_P_LIST,
     IDC_P_APPLYALL, IDC_P_RESTORE, IDC_P_DELETE, IDC_P_NOTE,
+    // internet page
+    IDC_N_START = 1100, IDC_N_CANCEL, IDC_N_PROG, IDC_N_PING, IDC_N_DOWN, IDC_N_UP,
+    IDC_N_IP, IDC_N_GRADE, IDC_N_CF, IDC_N_GOOG, IDC_N_AUTO, IDC_N_DNSST, IDC_N_STATUS,
     // tray menu
     IDM_TRAY_OPEN = 2000, IDM_TRAY_BOOST, IDM_TRAY_EXIT,
 };
@@ -130,6 +137,7 @@ extern std::wstring g_activeGame;
 extern int         g_lastScore;
 extern std::wstring g_beastGuid;
 extern std::wstring g_beastPrev;
+extern bool        g_autoBoost;
 
 // ---------- util.cpp ----------
 std::wstring Utf8ToWide(const char* s);
@@ -213,6 +221,9 @@ bool     PowerWriteSetting(const GUID& scheme, const GUID& sub, const GUID& sett
 std::wstring GuidToWString(const GUID& g);
 bool     WStringToGuid(const std::wstring& s, GUID& g);
 // Display / memory / timer
+bool SetDisplayResolution(int w, int h);
+bool GetNativeResolution(int& w, int& h);
+bool GetCurrentResolution(int& w, int& h);
 int  SetMaxRefreshRate(); // returns new Hz, 0 if unchanged/failed
 bool PurgeStandbyList();
 bool TimerSetMin(ULONG* prev);
@@ -292,6 +303,19 @@ bool BeastDeactivate();
 bool BeastIsActive();
 bool BeastDelete();
 void BeastLastOp(int& applied, int& total);
+
+// ---------- net.cpp ----------
+void NetTestRun(HWND notifyWnd);
+void NetTestCancel();
+bool NetTestBusy();
+bool NetGetIP(std::wstring& ip);
+bool DnsSetPreset(int preset);
+std::wstring DnsCurrent();
+
+// ---------- watch.cpp ----------
+void AutoBoostStart(HWND notifyWnd);
+void AutoBoostStop();
+bool AutoBoostWatching();
 
 // ---------- ui.cpp ----------
 bool UI_Create(HINSTANCE hInst);

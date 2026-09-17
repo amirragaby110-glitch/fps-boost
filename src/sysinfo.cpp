@@ -462,3 +462,40 @@ bool BcdDelete(const wchar_t* token) {
     if (!RunHidden(BcdExe().c_str(), args.c_str(), &code)) return false;
     return code == 0;
 }
+
+// ---------- Display resolution ----------
+bool GetCurrentResolution(int& w, int& h) {
+    w = GetSystemMetrics(SM_CXSCREEN);
+    h = GetSystemMetrics(SM_CYSCREEN);
+    return w > 0 && h > 0;
+}
+bool SetDisplayResolution(int w, int h) {
+    DEVMODEW cur; cur.dmSize = sizeof(cur);
+    if (!EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &cur)) return false;
+    int bestHz = 0;
+    DEVMODEW dm;
+    for (int i = 0; ; i++) {
+        ZeroMemory(&dm, sizeof(dm)); dm.dmSize = sizeof(dm);
+        if (!EnumDisplaySettingsW(NULL, i, &dm)) break;
+        if (dm.dmPelsWidth == w && dm.dmPelsHeight == h && dm.dmBitsPerPel == cur.dmBitsPerPel) {
+            if ((int)dm.dmDisplayFrequency > bestHz) bestHz = dm.dmDisplayFrequency;
+        }
+    }
+    if (bestHz <= 0) return false;
+    DEVMODEW set = cur;
+    set.dmPelsWidth = w; set.dmPelsHeight = h; set.dmDisplayFrequency = bestHz;
+    set.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY;
+    return ChangeDisplaySettingsW(&set, CDS_UPDATEREGISTRY) == DISP_CHANGE_SUCCESSFUL;
+}
+bool GetNativeResolution(int& w, int& h) {
+    w = 0; h = 0;
+    long best = 0;
+    DEVMODEW dm;
+    for (int i = 0; ; i++) {
+        ZeroMemory(&dm, sizeof(dm)); dm.dmSize = sizeof(dm);
+        if (!EnumDisplaySettingsW(NULL, i, &dm)) break;
+        long area = (long)dm.dmPelsWidth * dm.dmPelsHeight;
+        if (area > best) { best = area; w = dm.dmPelsWidth; h = dm.dmPelsHeight; }
+    }
+    return w > 0;
+}

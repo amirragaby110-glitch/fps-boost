@@ -20,6 +20,7 @@ std::wstring g_activeGame;
 int         g_lastScore = 0;
 std::wstring g_beastGuid;
 std::wstring g_beastPrev;
+bool        g_autoBoost = false;
 
 static HFONT MakeFont(int pt, bool bold) {
     HDC dc = GetDC(NULL);
@@ -102,6 +103,7 @@ int main() {
         return 1;
     }
     UI_TrayInit();
+    if (g_autoBoost) AutoBoostStart(g_hMain);
 
     if (!g_isAdmin) {
         // Still allow to run (games page works), but warn
@@ -119,6 +121,8 @@ int main() {
     }
 
     // Shutdown
+    NetTestCancel();
+    AutoBoostStop();
     Games_RestoreAfterSession();
     Settings_Save();
     Games_Save();

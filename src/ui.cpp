@@ -1023,7 +1023,7 @@ static void AiAsk() {
     q[b] = 0;
     std::wstring qq = q + a;
     SetWindowTextW(hAiInput, L"");
-    if (g_aiOnline && Ai_NeedsOnline(qq)) {
+    if (g_aiOnline) { // v2.1.1: online FIRST for every question; offline only as last resort
         if (!AiOnline_AskAsync(g_hMain, qq)) {
             SetLabel(hAiStatus, T(SID_A_THINK), LR_YELLOW);
             SetWindowTextW(hAiInput, qq.c_str());
@@ -1042,12 +1042,13 @@ static void AiOnlineDone(bool ok) {
     std::wstring a;
     if (ok && AiOnline_TakeResult(a)) {
         AiAppendBlock(WFormat(L"%s (%s):\r\n%s\r\n\r\n", T(SID_NAV_AI), T(SID_A_ONTAG), a.c_str()));
+        SetLabel(hAiStatus, WFormat(L"%s ✓", T(SID_A_ONLINE)), LR_ACCENT);
     } else {
         AiOnline_TakeResult(a);
         std::wstring fb = Ai_Answer(g_aiPending);
         AiAppendBlock(WFormat(L"%s:\r\n%s\r\n\r\n", T(SID_NAV_AI), fb.c_str()));
+        SetLabel(hAiStatus, T(SID_A_NOCONN), LR_YELLOW);
     }
-    SetLabel(hAiStatus, T(SID_STATUS_READY), LR_MUTED);
 }
 static void BuildAI(HWND p) {
     hAiInput = MkEdit(p, IDC_A_INPUT, 0, 0, 700, 32);
@@ -2286,7 +2287,8 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         }
         break;
     case WM_APP_AI:
-        AiOnlineDone(w == 1);
+        if (w == 2) SetLabel(hAiStatus, T(SID_A_RETRY), LR_YELLOW); // rate limited, retrying
+        else AiOnlineDone(w == 1);
         break;
     case WM_APP_UPDATE: {
         wchar_t* v = (wchar_t*)l;

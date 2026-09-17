@@ -722,68 +722,128 @@ static std::string AiUrlEncode(const std::string& in) {
     return o;
 }
 static std::wstring g_aiLastQ, g_aiLastA; // short conversation memory (online)
-static bool AiOnline_Fetch(const std::wstring& q, bool fa, std::wstring& answer) {
-    std::wstring specs = WFormat(fa ? L"مشخصات کاربر: %s؛ %s؛ %s؛ %s. " : L"User PC: %s; %s; %s; %s. ",
-        SysCpuName().c_str(), SysGpuName().c_str(), SysRamString().c_str(), SysOsString().c_str());
-    std::wstring mem;
-    if (!g_aiLastQ.empty())
-        mem = WFormat(fa ? L"گفتگوی قبلی: سوال «%s» / جواب «%s». " : L"Previous chat: Q: %s / A: %s. ",
-            g_aiLastQ.c_str(), g_aiLastA.c_str());
-    std::wstring sys = fa ?
-        L"تو دستیار فارسی FPS Booster هستی. خیلی کوتاه (زیر ۱۲۰ کلمه) و کاربردی جواب بده. " :
-        L"You are the FPS Booster assistant. Answer briefly (under 120 words), practical. ";
-    std::wstring full = sys + specs + mem + (fa ? L"سوال: " : L"Question: ") + q.substr(0, 160);
-    std::string path = "/" + AiUrlEncode(WideToUtf8(full)) + "?model=openai";
-    if (path.size() > 3800 && !mem.empty()) {
-        full = sys + specs + (fa ? L"سوال: " : L"Question: ") + q.substr(0, 160);
-        path = "/" + AiUrlEncode(WideToUtf8(full)) + "?model=openai";
-    }
-    if (path.size() > 4000) return false;
-    std::wstring wpath = Utf8ToWide(path);
-    HINTERNET ses = WinHttpOpen(L"FPSBooster/2.1", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+// Shared WinHTTP plumbing. Returns 1 = got HTTP response (code set), 0 = network failure.
+static int AiHttp(const wchar_t* host, const wchar_t* method, const wchar_t* wpath,
+                  const char* body, DWORD bodyLen, std::string& out, DWORD& code) {
+    out.clear(); code = 0;
+    HINTERNET ses = WinHttpOpen(L"FPSBooster/2.1.1", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
         WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!ses) return false;
-    WinHttpSetTimeouts(ses, 8000, 8000, 10000, 25000);
-    bool ok = false;
-    std::string body;
-    HINTERNET con = WinHttpConnect(ses, L"text.pollinations.ai", INTERNET_DEFAULT_HTTPS_PORT, 0);
+    if (!ses) return 0;
+    WinHttpSetTimeouts(ses, 5000, 8000, 10000, 45000);
+    int ret = 0;
+    HINTERNET con = WinHttpConnect(ses, host, INTERNET_DEFAULT_HTTPS_PORT, 0);
     if (con) {
-        HINTERNET req = WinHttpOpenRequest(con, L"GET", wpath.c_str(), NULL,
+        HINTERNET req = WinHttpOpenRequest(con, method, wpath, NULL,
             WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
         if (req) {
-            if (WinHttpSendRequest(req, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
-                    WINHTTP_NO_REQUEST_DATA, 0, 0, 0) && WinHttpReceiveResponse(req, NULL)) {
-                DWORD code = 0, clen = sizeof(code);
+            BOOL sent;
+            if (body && bodyLen > 0) {
+                WinHttpAddRequestHeaders(req, L"Content-Type: application/json", (ULONG)-1,
+                    WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE);
+                sent = WinHttpSendRequest(req, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
+                    (LPVOID)body, bodyLen, bodyLen, 0);
+            } else {
+                sent = WinHttpSendRequest(req, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
+                    WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+            }
+            if (sent && WinHttpReceiveResponse(req, NULL)) {
+                DWORD clen = sizeof(code);
                 WinHttpQueryHeaders(req, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
                     NULL, &code, &clen, NULL);
-                if (code == 200) {
-                    char buf[4096];
-                    DWORD got = 0;
-                    ok = true;
-                    while (body.size() < 6000 && WinHttpReadData(req, buf, sizeof(buf), &got) && got > 0)
-                        body.append(buf, got);
-                    if (body.empty()) ok = false;
-                }
+                char buf[4096];
+                DWORD got = 0;
+                while (out.size() < 12000 && WinHttpReadData(req, buf, sizeof(buf), &got) && got > 0)
+                    out.append(buf, got);
+                ret = 1;
             }
             WinHttpCloseHandle(req);
         }
         WinHttpCloseHandle(con);
     }
     WinHttpCloseHandle(ses);
-    if (!ok) return false;
-    while (!body.empty() && (body[body.size() - 1] == '\n' || body[body.size() - 1] == '\r' ||
-        body[body.size() - 1] == ' ' || body[body.size() - 1] == '\t')) body.erase(body.size() - 1);
-    size_t st = 0;
-    while (st < body.size() && (body[st] == '\n' || body[st] == '\r' || body[st] == ' ')) st++;
-    std::wstring w = Utf8ToWide(body.substr(st));
-    std::wstring o;
+    return ret;
+}
+// Drop \uD800-\uDFFF escapes (emoji) - the JSON parser has no surrogate-pair support.
+static void AiStripSurrogates(std::string& s) {
+    std::string o;
+    o.reserve(s.size());
+    for (size_t i = 0; i < s.size(); i++) {
+        if (s[i] == '\\' && i + 5 < s.size() && s[i+1] == 'u' &&
+            (s[i+2] == 'd' || s[i+2] == 'D')) {
+            char h = s[i+3];
+            bool hi = (h >= '8' && h <= '9') || (h >= 'a' && h <= 'f') || (h >= 'A' && h <= 'F');
+            bool rest = true;
+            for (int k = 4; k <= 5 && rest; k++) {
+                char c = s[i+k];
+                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) rest = false;
+            }
+            if (hi && rest) { i += 5; continue; }
+        }
+        o += s[i];
+    }
+    s.swap(o);
+}
+static bool AiCleanAnswer(const std::string& in, std::wstring& out) {
+    size_t st = 0, en = in.size();
+    while (en > st && (in[en-1] == '\n' || in[en-1] == '\r' || in[en-1] == ' ' || in[en-1] == '\t')) en--;
+    while (st < en && (in[st] == '\n' || in[st] == '\r' || in[st] == ' ')) st++;
+    if (st >= en) return false;
+    std::wstring w = Utf8ToWide(in.substr(st, en - st));
+    out.clear();
     for (size_t i = 0; i < w.size(); i++) {
         if (w[i] == L'\r') continue;
-        if (w[i] == L'\n') o += L"\r\n";
-        else o += w[i];
+        if (w[i] == L'\n') out += L"\r\n";
+        else out += w[i];
     }
-    answer = o;
-    return !answer.empty();
+    return !out.empty();
+}
+static std::wstring AiSysPrompt(bool fa) {
+    std::wstring specs = WFormat(fa ? L"مشخصات کاربر: %s؛ %s؛ %s؛ %s. " : L"User PC: %s; %s; %s; %s. ",
+        SysCpuName().c_str(), SysGpuName().c_str(), SysRamString().c_str(), SysOsString().c_str());
+    return (fa ? L"تو دستیار فارسی FPS Booster هستی. خیلی کوتاه (زیر ۱۲۰ کلمه) و کاربردی جواب بده. "
+               : L"You are the FPS Booster assistant. Answer briefly (under 120 words), practical. ") + specs;
+}
+// Attempt codes: 1 ok, 0 network failure (do not retry), 2 http error (try next), 3 rate limited.
+static int AiPostOpenAI(const std::wstring& q, bool fa, std::wstring& answer) {
+    std::string jb = "{\"model\":\"openai\",\"messages\":[";
+    jb += "{\"role\":\"system\",\"content\":\"" + JsonEscapeW(AiSysPrompt(fa)) + "\"}";
+    if (!g_aiLastQ.empty()) {
+        jb += ",{\"role\":\"user\",\"content\":\"" + JsonEscapeW(g_aiLastQ) + "\"}";
+        jb += ",{\"role\":\"assistant\",\"content\":\"" + JsonEscapeW(g_aiLastA) + "\"}";
+    }
+    jb += ",{\"role\":\"user\",\"content\":\"" + JsonEscapeW(q) + "\"}]}";
+    std::string out; DWORD code = 0;
+    if (!AiHttp(L"text.pollinations.ai", L"POST", L"/openai", jb.c_str(), (DWORD)jb.size(), out, code))
+        return 0;
+    if (code == 429) return 3;
+    if (code != 200 || out.empty()) return 2;
+    AiStripSurrogates(out);
+    JVal root;
+    if (!ParseJson(out, root) || root.type != JVal::OBJ) return 2;
+    const JVal* ch = root.find("choices");
+    if (!ch || ch->type != JVal::ARR || ch->arr.empty()) return 2;
+    const JVal* msg = ch->arr[0].find("message");
+    if (!msg) return 2;
+    return AiCleanAnswer(msg->str("content"), answer) ? 1 : 2;
+}
+static int AiGetPrompt(const std::wstring& q, bool fa, std::wstring& answer) {
+    std::wstring mem;
+    if (!g_aiLastQ.empty())
+        mem = WFormat(fa ? L"گفتگوی قبلی: سوال «%s» / جواب «%s». " : L"Previous chat: Q: %s / A: %s. ",
+            g_aiLastQ.c_str(), g_aiLastA.c_str());
+    std::wstring full = AiSysPrompt(fa) + mem + (fa ? L"سوال: " : L"Question: ") + q.substr(0, 160);
+    std::string path = "/" + AiUrlEncode(WideToUtf8(full)) + "?model=openai";
+    if (path.size() > 3800 && !mem.empty()) {
+        full = AiSysPrompt(fa) + (fa ? L"سوال: " : L"Question: ") + q.substr(0, 160);
+        path = "/" + AiUrlEncode(WideToUtf8(full)) + "?model=openai";
+    }
+    if (path.size() > 4000) return 2;
+    std::string out; DWORD code = 0;
+    if (!AiHttp(L"text.pollinations.ai", L"GET", Utf8ToWide(path).c_str(), NULL, 0, out, code))
+        return 0;
+    if (code == 429) return 3;
+    if (code != 200 || out.empty()) return 2;
+    return AiCleanAnswer(out, answer) ? 1 : 2;
 }
 struct AiOnlineCtx { HWND w; std::wstring q; bool fa; };
 static CRITICAL_SECTION g_aiCs;
@@ -794,7 +854,20 @@ static LONG g_aiBusy = 0;
 static DWORD WINAPI AiOnlineThread(LPVOID arg) {
     AiOnlineCtx* c = (AiOnlineCtx*)arg;
     std::wstring a;
-    bool ok = AiOnline_Fetch(c->q, c->fa, a);
+    int r = AiPostOpenAI(c->q, c->fa, a);
+    if (r == 2 || r == 3) {
+        int r2 = AiGetPrompt(c->q, c->fa, a);
+        if (r2 == 1) r = 1;
+        else if (r2 == 3) r = 3;
+        else if (r == 2) r = r2;
+    }
+    if (r == 3) {
+        PostMessageW(c->w, WM_APP_AI, 2, 0); // rate limited: wait out the window, retry once
+        Sleep(16000);
+        r = AiPostOpenAI(c->q, c->fa, a);
+        if (r == 2) r = AiGetPrompt(c->q, c->fa, a);
+    }
+    bool ok = (r == 1);
     if (!g_aiCsInit) { InitializeCriticalSection(&g_aiCs); g_aiCsInit = true; }
     EnterCriticalSection(&g_aiCs);
     g_aiRes = a; g_aiOk = ok;

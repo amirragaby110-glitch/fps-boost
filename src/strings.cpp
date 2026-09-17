@@ -40,7 +40,7 @@ static const StrRow kRows[] = {
 {SID_BTN_SAVE, "Save", "ذخیره"},
 {SID_BTN_CANCEL, "Cancel", "انصراف"},
 {SID_STATUS_READY, "Ready", "آماده"},
-{SID_VER, "Version 2.1.0", "نسخه 2.1.0"},
+{SID_VER, "Version 2.1.1", "نسخه 2.1.1"},
 
 {SID_DASH_TITLE, "Dashboard", "داشبورد"},
 {SID_DASH_SUB, "Your PC optimization status at a glance", "وضعیت بهینه‌سازی سیستم شما در یک نگاه"},
@@ -163,7 +163,7 @@ static const StrRow kRows[] = {
 {SID_SET_STARTUP, "Start with Windows", "اجرا همراه ویندوز"},
 {SID_SET_FOLDER, "Open data folder", "باز کردن پوشه داده‌ها"},
 {SID_SET_RESET, "Reset all settings", "بازنشانی همه تنظیمات"},
-{SID_SET_ABOUT, "FPS Booster Pro 2.1.0 - Ultimate Game FPS Optimizer", "FPS Booster Pro نسخه 2.1.0 - بهینه‌ساز نهایی اف‌پی‌اس بازی"},
+{SID_SET_ABOUT, "FPS Booster Pro 2.1.1 - Ultimate Game FPS Optimizer", "FPS Booster Pro نسخه 2.1.1 - بهینه‌ساز نهایی اف‌پی‌اس بازی"},
 {SID_SET_CONFIRM_RESET, "Reset all settings and revert all tweaks?", "همه تنظیمات بازنشانی و همه توییک‌ها برگردانده شود؟"},
 {SID_SET_RESTART_LANG, "Language will apply after restart.", "زبان بعد از اجرای مجدد اعمال می‌شود."},
 
@@ -269,6 +269,8 @@ static const StrRow kRows[] = {
 {SID_R_HINT, "Pick your game, then Boost priority + RAM Focus for max FPS.", "بازی‌ات را انتخاب کن، بعد «بوست اولویت» + «تمرکز رم» را بزن تا بیشترین فریم را بگیری."},
 {SID_R_SELF, "(this app)", "(این برنامه)"},
 {SID_A_ONLINE, "Online AI", "هوش آنلاین"},
+{SID_A_NOCONN, "No connection - answered offline", "\u0627\u062a\u0635\u0627\u0644 \u0646\u06cc\u0633\u062a - \u0622\u0641\u0644\u0627\u06cc\u0646 \u062c\u0648\u0627\u0628 \u062f\u0627\u062f\u0645"},
+{SID_A_RETRY, "Rate limited - retrying online...", "\u0645\u062d\u062f\u0648\u062f\u06cc\u062a \u0633\u0631\u0639\u062a - \u062a\u0644\u0627\u0634 \u0645\u062c\u062f\u062f..."},
 {SID_A_THINK, "Thinking...", "در حال فکر..."},
 {SID_A_ONTAG, "online", "آنلاین"},
 {SID_M_GAME, "Boosting foreground game...", "بوست بازی جلویی..."},

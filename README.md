@@ -17,6 +17,7 @@ Everything is **backed up and reversible**, with an automatic **restore point** 
 - ⚡ **One-Click Ultimate Boost** with live log & progress
 - 🧰 **25 tweaks**: gaming, performance, visual, network, privacy, advanced, actions
 - 📊 Optimization **score & grade**, live CPU/RAM graphs, system tray
+- ⚡ **Beast Mode**: dedicated power plan that unleashes 100% hardware power (CPU max, aggressive turbo, no core parking, no USB/PCIe/Wi-Fi saving, no sleep)
 - 🛡️ Restore point + full backup (`backup.json`) + one-click **Undo everything**
 
 ## Download & Run
@@ -118,6 +119,7 @@ MIT — see [LICENSE](LICENSE).
 - ⚡ **بوست تک‌کلیکی** با لاگ زنده و نوار پیشرفت
 - 🧰 **۲۵ توییک**: گیمینگ، کارایی، ظاهری، شبکه، حریم خصوصی، پیشرفته، اقدامات
 - 📊 **امتیاز و رتبه** بهینه‌سازی، نمودار زنده، سینی سیستم
+- ⚡ **حالت حداکثر توان (Beast Mode)**: پلن انرژی اختصاصی که ۱۰۰٪ توان سخت‌افزار را آزاد می‌کند (حداکثر CPU، توربو تهاجمی، بدون پارک هسته، بدون صرفه‌جویی USB/PCIe/وای‌فای، بدون خواب)
 - 🛡️ نقطه بازیابی + بکاپ کامل + **بازگردانی همه با یک کلیک**
 
 ## دانلود و اجرا

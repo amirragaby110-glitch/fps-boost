@@ -18,6 +18,8 @@ bool        g_boosting = false;
 bool        g_inGame = false;
 std::wstring g_activeGame;
 int         g_lastScore = 0;
+std::wstring g_beastGuid;
+std::wstring g_beastPrev;
 
 static HFONT MakeFont(int pt, bool bold) {
     HDC dc = GetDC(NULL);

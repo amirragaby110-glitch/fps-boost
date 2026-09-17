@@ -347,10 +347,14 @@ static DWORD WINAPI LaunchThread(LPVOID arg) {
 
     // pre-launch tuning
     if (g.powerBoost) {
-        GUID cur;
-        if (PowerGetActiveGuid(cur)) { g_sessPower = cur; }
-        GUID u;
-        if (PowerEnsureUltimate(u)) { PowerSetActive(u); g_sessPowerSet = true; }
+        if (BeastIsActive()) {
+            LogW(L"Beast Mode already active - keeping it for this session");
+        } else {
+            GUID cur;
+            if (PowerGetActiveGuid(cur)) { g_sessPower = cur; }
+            GUID u;
+            if (PowerEnsureUltimate(u)) { PowerSetActive(u); g_sessPowerSet = true; }
+        }
     }
     std::vector<std::wstring> kills = SplitWs(g.killList, L';');
     if (!kills.empty()) {

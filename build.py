@@ -16,7 +16,7 @@ RELEASE = os.path.join(ROOT, 'release')
 TARGET_SIZE = 100 * 1024 * 1024  # exactly 100 MiB -> Explorer shows "100 MB"
 
 SOURCES = ['main.cpp', 'strings.cpp', 'util.cpp', 'sysinfo.cpp',
-           'tweaks.cpp', 'games.cpp', 'ui.cpp']
+           'tweaks.cpp', 'games.cpp', 'ui.cpp', 'power.cpp']
 LIBS = ['comctl32', 'gdi32', 'gdiplus', 'shell32', 'ole32', 'uuid',
         'powrprof', 'advapi32', 'comdlg32']
 
@@ -123,7 +123,7 @@ def main():
     run([sys.executable, 'tools/inject_resources.py', raw, full,
          '--icon', 'assets/icon.ico', '--manifest', 'res/app.manifest',
          '--logo', 'assets/logo_ui.png', '--banner', 'assets/banner_ui.png',
-         '--db', 'data/games_db.json', '--ver', '1.0.0'])
+         '--db', 'data/games_db.json', '--ver', '1.1.0'])
 
     print('=== [4/5] PE checks + pad to 100 MB ===')
     check_imports(full)
@@ -131,7 +131,7 @@ def main():
     pad_to_100mb(full, exe)
 
     print('=== [5/5] portable zip ===')
-    zpath = os.path.join(RELEASE, 'FPSBooster-v1.0-Portable.zip')
+    zpath = os.path.join(RELEASE, 'FPSBooster-v1.1-Portable.zip')
     with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         z.write(exe, 'fpsbooster.exe')
         z.write(os.path.join(ROOT, 'README.md'), 'README.md')

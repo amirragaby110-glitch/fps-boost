@@ -54,12 +54,15 @@ void Settings_Load() {
     g_closeToTray = root.num("tray", 1) != 0;
     g_lastBoost = root.wstr("lastBoost");
     g_lastScore = root.num("score", 0);
+    g_beastGuid = root.wstr("beast");
+    g_beastPrev = root.wstr("beastprev");
 }
 void Settings_Save() {
     char nb[128];
     snprintf(nb, 128, "{\"lang\":%d,\"tray\":%d,\"score\":%d", Strings_GetLang(), g_closeToTray?1:0, g_lastScore);
     std::string j = nb;
     j += ",\"lastBoost\":\"" + JsonEscapeW(g_lastBoost) + "\"}";
+    j += ",\"beast\":\"" + JsonEscapeW(g_beastGuid) + "\",\"beastprev\":\"" + JsonEscapeW(g_beastPrev) + "\"}";
     WriteFileText(JoinPath(g_dataDir, L"settings.json"), j);
 }
 
@@ -175,6 +178,7 @@ static const wchar_t* NavText(int page) {
     case PAGE_TWEAKS: return T(SID_NAV_TWEAKS);
     case PAGE_SYSTEM: return T(SID_NAV_SYSTEM);
     case PAGE_HELP: return T(SID_NAV_HELP);
+    case PAGE_POWER: return T(SID_NAV_POWER);
     default: return T(SID_NAV_SETTINGS);
     }
 }
@@ -552,7 +556,13 @@ static const char* kHelpEN =
 "- Is it safe? Yes: restore point + full backup before changes.\r\n"
 "- SmartScreen warning? Normal for new unsigned apps - click More info / Run.\r\n"
 "- Admin rights? Required for system-level optimizations.\r\n"
-"- After big Windows updates, run the boost again.\r\n";
+"- After big Windows updates, run the boost again.\r\n"
+"\r\n6) POWER (BEAST MODE)\r\n"
+"- The Power page creates a dedicated plan using 100% of your hardware:\r\n"
+"  max CPU speed, aggressive turbo, no core parking, no USB/PCIe/Wi-Fi\r\n"
+"  saving, display and sleep set to Never while plugged in.\r\n"
+"- One click activates it, one click restores your previous plan.\r\n"
+"- You can also apply all settings to your current plan instead.\r\n";
 static const char* kHelpFA =
 "راهنمای FPS BOOSTER PRO\r\n"
 "================================\r\n\r\n"
@@ -583,7 +593,12 @@ static const char* kHelpFA =
 "- امن است؟ بله: قبل از تغییر، نقطه بازیابی و بکاپ کامل گرفته می‌شود.\r\n"
 "- هشدار SmartScreen؟ برای برنامه‌های جدید طبیعی است.\r\n"
 "- دسترسی مدیر؟ برای بهینه‌سازی‌های سیستمی لازم است.\r\n"
-"- بعد از آپدیت بزرگ ویندوز، بوست را دوباره اجرا کنید.\r\n";
+"- بعد از آپدیت بزرگ ویندوز، بوست را دوباره اجرا کنید.\r\n"
+"\r\n۶) پاور (حالت حداکثر توان)\r\n"
+"- صفحه پاور یک پلن اختصاصی می‌سازد که ۱۰۰٪ توان سخت‌افزار را آزاد می‌کند:\r\n"
+"  حداکثر سرعت پردازنده، توربو تهاجمی، بدون پارک هسته، بدون صرفه‌جویی\r\n"
+"  USB/PCIe/وای‌فای، نمایشگر و خواب روی Never.\r\n"
+"- با یک کلیک فعال و با یک کلیک به پلن قبلی برمی‌گردد.\r\n";
 static void BuildHelp(HWND p) {
     hHelpText = MkEdit(p, IDC_H_TEXT, 0, 0, 892, 590, true, true);
     SetWindowTextW(hHelpText, Utf8ToWide(Strings_GetLang() == 1 ? kHelpFA : kHelpEN).c_str());
@@ -615,6 +630,50 @@ static void BuildSettings(HWND p) {
     SetLabel(ab, T(SID_SET_ABOUT), COL_MUTED);
 }
 
+// ---------- Power ----------
+static HWND hPowPlan, hPowStatus, hPowBeast, hPowList, hPowNote;
+static std::wstring PowFmtVal(const PowerSetting& p, DWORD v) {
+    if (p.fmt == 1) return WFormat(L"%d%%", v);
+    if (p.fmt == 2) {
+        if (v == 0) return T(SID_P_NEVER);
+        if (v >= 60 && v % 60 == 0)
+            return WFormat(L"%d %s", v / 60, Strings_GetLang() == 1 ? L"دقیقه" : L"min");
+        return WFormat(L"%d s", v);
+    }
+    return WFormat(L"%d", v);
+}
+static void PowRefresh() {
+    SetLabel(hPowPlan, WFormat(L"%s %s", T(SID_P_CUR), PowerGetActiveName().c_str()), COL_TEXT);
+    bool on = BeastIsActive();
+    SetWindowTextW(hPowBeast, T(on ? SID_P_DEACTIVATE : SID_P_ACTIVATE));
+    SetLabel(hPowStatus, WFormat(L"%s: %s", T(SID_P_BEAST), T(on ? SID_P_ACTIVE : SID_P_OFF)), on ? COL_GREEN : COL_MUTED);
+    ListView_DeleteAllItems(hPowList);
+    int n = 0;
+    const PowerSetting* ps = PowerSettings(&n);
+    for (int i = 0; i < n; i++) {
+        std::wstring nm = Utf8ToWide(Strings_GetLang() == 1 ? ps[i].nameFa : ps[i].nameEn);
+        int r = LVAddRow(hPowList, i, nm.c_str());
+        LVSet(hPowList, r, 1, PowFmtVal(ps[i], ps[i].ac));
+        DWORD ac = 0, dc = 0;
+        LVSet(hPowList, r, 2, PowerReadActive(ps[i], ac, dc) ? PowFmtVal(ps[i], ac) : T(SID_NA));
+    }
+}
+static void BuildPower(HWND p) {
+    hPowPlan = MkLabel(p, 0, 4, 700, 26, g_hFontBig);
+    MkButton(p, IDC_P_REFRESH, 712, 0, 180, 32, SID_BTN_REFRESH);
+    hPowStatus = MkLabel(p, 0, 40, 560, 26, g_hFontBig);
+    hPowNote = MkLabel(p, 560, 40, 332, 26);
+    SetLabel(hPowNote, T(SID_P_NOTE), COL_MUTED);
+    hPowBeast = MkCTA(p, IDC_P_BEAST, 0, 72, 340, 54, SID_P_ACTIVATE);
+    hPowList = MkList(p, IDC_P_LIST, 0, 140, 892, 380);
+    int ids[] = {SID_P_COL_SET, SID_P_COL_BEAST, SID_P_COL_CUR};
+    int wd[] = {450, 200, 210};
+    LVCols(hPowList, ids, wd, 3);
+    MkButton(p, IDC_P_APPLYALL, 0, 532, 240, 36, SID_P_APPLYALL);
+    MkButton(p, IDC_P_RESTORE, 250, 532, 200, 36, SID_P_RESTORE);
+    MkButton(p, IDC_P_DELETE, 460, 532, 200, 36, SID_P_DELETE);
+}
+
 // ---------- Page management ----------
 static const int kPageOfNav[PAGE_COUNT] = {0, 1, 2, 3, 4, 5, 6};
 void UI_ShowPage(int page) {
@@ -623,8 +682,8 @@ void UI_ShowPage(int page) {
     for (int i = 0; i < PAGE_COUNT; i++)
         ShowWindow(g_hPages[i], i == page ? SW_SHOW : SW_HIDE);
     static StrId titles[] = {SID_NAV_DASH, SID_NAV_GAMES, SID_NAV_BOOST, SID_NAV_TWEAKS,
-                             SID_NAV_SYSTEM, SID_NAV_HELP, SID_NAV_SETTINGS};
-    static StrId subs[] = {SID_DASH_SUB, SID_G_SUB, SID_B_SUB, SID_T_SUB, SID_S_SUB, SID_H_SUB, SID_SET_SUB};
+                             SID_NAV_SYSTEM, SID_NAV_HELP, SID_NAV_SETTINGS, SID_NAV_POWER};
+    static StrId subs[] = {SID_DASH_SUB, SID_G_SUB, SID_B_SUB, SID_T_SUB, SID_S_SUB, SID_H_SUB, SID_SET_SUB, SID_P_SUB};
     SetWindowTextW(hTitle, WFormat(L"%s   -   %s", T(titles[page]), T(subs[page])).c_str());
     InvalidateRect(hSide, NULL, TRUE);
     for (int i = 0; i < PAGE_COUNT; i++) {
@@ -636,6 +695,7 @@ void UI_ShowPage(int page) {
     case PAGE_GAMES: GamesFillList(); break;
     case PAGE_TWEAKS: TweaksFillList(); TweaksShowDetail(-1); break;
     case PAGE_SYSTEM: SysRefresh(); break;
+    case PAGE_POWER: PowRefresh(); break;
     }
 }
 void UI_RefreshAll() {
@@ -1067,6 +1127,32 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
                 UI_RefreshAll();
             }
             break;
+        case IDC_P_REFRESH:
+            PowRefresh();
+            break;
+        case IDC_P_BEAST:
+            if (!g_boosting && !Games_IsBusy()) {
+                if (BeastIsActive()) BeastDeactivate();
+                else BeastActivate();
+                int ap2 = 0, tt2 = 0; BeastLastOp(ap2, tt2);
+                if (tt2 > 0) SetWindowTextW(hStatusBar, WFormat(L"Beast: %d/%d %s", ap2, tt2, T(SID_P_APPLIED)).c_str());
+                PowRefresh();
+            }
+            break;
+        case IDC_P_APPLYALL:
+            if (!g_boosting) {
+                int tot = 0; PowerSettings(&tot);
+                int n = PowerApplyAllActive();
+                SetWindowTextW(hStatusBar, WFormat(L"%d/%d %s", n, tot, T(SID_P_APPLIED)).c_str());
+                PowRefresh();
+            }
+            break;
+        case IDC_P_RESTORE:
+            if (!g_boosting) { PowerRestoreAllActive(); PowRefresh(); SetWindowTextW(hStatusBar, T(SID_MSG_DONE)); }
+            break;
+        case IDC_P_DELETE:
+            if (!g_boosting && !Games_IsBusy()) { BeastDelete(); PowRefresh(); }
+            break;
         case IDM_TRAY_OPEN:
             UI_TrayShow(true);
             break;
@@ -1214,6 +1300,10 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         MoveWindow(GetDlgItem(g_hPages[PAGE_SYSTEM], IDC_S_CLEANTEMP), S(232), ph - S(100), S(220), S(38), TRUE);
         MoveWindow(GetDlgItem(g_hPages[PAGE_SYSTEM], IDC_S_REFRESH), S(464), ph - S(100), S(240), S(38), TRUE);
         MoveWindow(hHelpText, 0, 0, pw, ph - S(8), TRUE);
+        MoveWindow(hPowList, 0, S(140), pw, ph - S(140) - S(60), TRUE);
+        MoveWindow(GetDlgItem(g_hPages[PAGE_POWER], IDC_P_APPLYALL), 0, ph - S(48), S(240), S(36), TRUE);
+        MoveWindow(GetDlgItem(g_hPages[PAGE_POWER], IDC_P_RESTORE), S(250), ph - S(48), S(200), S(36), TRUE);
+        MoveWindow(GetDlgItem(g_hPages[PAGE_POWER], IDC_P_DELETE), S(460), ph - S(48), S(200), S(36), TRUE);
         InvalidateRect(h, NULL, TRUE);
         break;
     }
@@ -1316,6 +1406,7 @@ bool UI_Create(HINSTANCE hInst) {
     BuildSystem(g_hPages[PAGE_SYSTEM]);
     BuildHelp(g_hPages[PAGE_HELP]);
     BuildSettings(g_hPages[PAGE_SETTINGS]);
+    BuildPower(g_hPages[PAGE_POWER]);
 
     hStatusBar = Mk(g_hMain, WC_STATICW, T(SID_STATUS_READY), WS_CHILD | WS_VISIBLE | SS_LEFT, 0,
         240, 730, 900, 30, 0, g_hFont);

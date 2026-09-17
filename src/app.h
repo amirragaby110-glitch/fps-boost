@@ -39,7 +39,7 @@
 #define WM_APP_REFRESH    (WM_APP + 15)
 
 // Pages
-enum PageId { PAGE_DASH = 0, PAGE_GAMES, PAGE_BOOST, PAGE_TWEAKS, PAGE_SYSTEM, PAGE_HELP, PAGE_SETTINGS, PAGE_COUNT };
+enum PageId { PAGE_DASH = 0, PAGE_GAMES, PAGE_BOOST, PAGE_TWEAKS, PAGE_SYSTEM, PAGE_HELP, PAGE_SETTINGS, PAGE_POWER, PAGE_COUNT };
 
 // Tweak categories
 enum TweakCat { TCAT_GAMING = 0, TCAT_PERF, TCAT_VISUAL, TCAT_NET, TCAT_PRIV, TCAT_ADV, TCAT_ACT };
@@ -74,6 +74,9 @@ enum CtrlId {
     // settings
     IDC_SET_LANG = 900, IDC_SET_TRAY, IDC_SET_STARTUP,
     IDC_SET_FOLDER, IDC_SET_RESET, IDC_SET_ABOUT,
+    // power page
+    IDC_P_PLAN = 950, IDC_P_REFRESH, IDC_P_BEAST, IDC_P_STATUS, IDC_P_LIST,
+    IDC_P_APPLYALL, IDC_P_RESTORE, IDC_P_DELETE, IDC_P_NOTE,
     // tray menu
     IDM_TRAY_OPEN = 2000, IDM_TRAY_BOOST, IDM_TRAY_EXIT,
 };
@@ -125,6 +128,8 @@ extern bool        g_boosting;
 extern bool        g_inGame;
 extern std::wstring g_activeGame;
 extern int         g_lastScore;
+extern std::wstring g_beastGuid;
+extern std::wstring g_beastPrev;
 
 // ---------- util.cpp ----------
 std::wstring Utf8ToWide(const char* s);
@@ -268,6 +273,25 @@ bool Games_IsBusy();
 void Settings_Load();
 void Settings_Save();
 extern std::wstring g_lastBoost;
+
+// ---------- power.cpp ----------
+struct PowerSetting {
+    const char* key;
+    const char* nameEn; const char* nameFa;
+    GUID sub; GUID set;
+    DWORD ac; DWORD dc;
+    int fmt;
+};
+const PowerSetting* PowerSettings(int* count);
+bool PowerReadActive(const PowerSetting& ps, DWORD& ac, DWORD& dc);
+int  PowerApplyAllActive();
+int  PowerRestoreAllActive();
+bool BeastEnsure(GUID& g);
+bool BeastActivate();
+bool BeastDeactivate();
+bool BeastIsActive();
+bool BeastDelete();
+void BeastLastOp(int& applied, int& total);
 
 // ---------- ui.cpp ----------
 bool UI_Create(HINSTANCE hInst);

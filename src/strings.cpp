@@ -40,7 +40,7 @@ static const StrRow kRows[] = {
 {SID_BTN_SAVE, "Save", "ذخیره"},
 {SID_BTN_CANCEL, "Cancel", "انصراف"},
 {SID_STATUS_READY, "Ready", "آماده"},
-{SID_VER, "Version 1.0.0", "نسخه 1.0.0"},
+{SID_VER, "Version 1.1.0", "نسخه 1.1.0"},
 
 {SID_DASH_TITLE, "Dashboard", "داشبورد"},
 {SID_DASH_SUB, "Your PC optimization status at a glance", "وضعیت بهینه‌سازی سیستم شما در یک نگاه"},
@@ -163,7 +163,7 @@ static const StrRow kRows[] = {
 {SID_SET_STARTUP, "Start with Windows", "اجرا همراه ویندوز"},
 {SID_SET_FOLDER, "Open data folder", "باز کردن پوشه داده‌ها"},
 {SID_SET_RESET, "Reset all settings", "بازنشانی همه تنظیمات"},
-{SID_SET_ABOUT, "FPS Booster Pro 1.0.0 - Ultimate Game FPS Optimizer", "FPS Booster Pro نسخه 1.0.0 - بهینه‌ساز نهایی اف‌پی‌اس بازی"},
+{SID_SET_ABOUT, "FPS Booster Pro 1.1.0 - Ultimate Game FPS Optimizer", "FPS Booster Pro نسخه 1.1.0 - بهینه‌ساز نهایی اف‌پی‌اس بازی"},
 {SID_SET_CONFIRM_RESET, "Reset all settings and revert all tweaks?", "همه تنظیمات بازنشانی و همه توییک‌ها برگردانده شود؟"},
 {SID_SET_RESTART_LANG, "Language will apply after restart.", "زبان بعد از اجرای مجدد اعمال می‌شود."},
 
@@ -177,6 +177,23 @@ static const StrRow kRows[] = {
 {SID_TRAY_BOOST, "One-Click Boost", "بوست تک‌کلیکی"},
 {SID_TRAY_EXIT, "Exit", "خروج"},
 {SID_TRAY_TIP, "FPS Booster Pro", "FPS Booster Pro"},
+{SID_NAV_POWER, "Power", "پاور"},
+{SID_P_SUB, "Unleash the full hardware power for gaming", "آزادسازی تمام توان سخت‌افزار برای بازی"},
+{SID_P_CUR, "Current plan:", "پلن فعلی:"},
+{SID_P_BEAST, "BEAST MODE", "حالت حداکثر توان"},
+{SID_P_ACTIVE, "Beast Mode is ACTIVE - full power unleashed", "حالت حداکثر توان فعال است - تمام قدرت آزاد شد"},
+{SID_P_OFF, "Beast Mode is off", "حالت حداکثر توان خاموش است"},
+{SID_P_ACTIVATE, "ACTIVATE BEAST MODE", "فعال‌سازی حالت حداکثر توان"},
+{SID_P_DEACTIVATE, "DEACTIVATE & RESTORE", "غیرفعال‌سازی و بازگردانی"},
+{SID_P_COL_SET, "Setting", "تنظیم"},
+{SID_P_COL_BEAST, "Beast target", "هدف"},
+{SID_P_COL_CUR, "Current", "فعلی"},
+{SID_P_APPLYALL, "Apply all to current plan", "اعمال همه روی پلن فعلی"},
+{SID_P_RESTORE, "Restore defaults", "بازگردانی پیش‌فرض‌ها"},
+{SID_P_DELETE, "Delete Beast plan", "حذف پلن Beast"},
+{SID_P_NOTE, "Best while plugged in. One click restores everything.", "بهتر است به برق وصل باشید. همه‌چیز با یک کلیک برمی‌گردد."},
+{SID_P_APPLIED, "applied", "اعمال شد"},
+{SID_P_NEVER, "Never", "هرگز"},
 };
 
 static std::wstring g_cache[2][SID_COUNT];

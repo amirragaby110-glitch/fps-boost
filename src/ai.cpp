@@ -582,10 +582,10 @@ static std::wstring AiFallback(bool fa) {
 
 static std::wstring AiTheme(bool fa) {
     if (!fa) return L"\U0001F316 Theme: Settings page \u2192 Theme = Dark / Light / Auto (follows Windows).\r\n"
-        L"\u2022 4 accent colors: Neon, Emerald, Sunset, Violet\r\n"
+        L"\u2022 4 accent colors: Aurora, Emerald, Sunset, Violet\r\n"
         L"\u2022 Quick button (moon/sun) at the top toggles instantly, no restart.";
     return L"\U0001F316 تم: صفحه تنظیمات \u2192 پوسته = تیره / روشن / خودکار (دنبال‌کننده ویندوز).\r\n"
-        L"\u2022 چهار رنگ اصلی: نئون، زمردی، غروب، بنفش\r\n"
+        L"\u2022 چهار رنگ اصلی: شفق، زمردی، غروب، بنفش\r\n"
         L"\u2022 دکمه سریع ماه/خورشید بالا هم فوری عوض می‌کند، بدون ری‌استارت.";
 }
 static std::wstring AiHotkey(bool fa) {
@@ -727,7 +727,7 @@ static int AiHttp(const wchar_t* host, const wchar_t* method, const wchar_t* wpa
                   const char* body, DWORD bodyLen, std::string& out, DWORD& code,
                   const wchar_t* xhdr = NULL) {
     out.clear(); code = 0;
-    HINTERNET ses = WinHttpOpen(L"FPSBooster/2.3", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+    HINTERNET ses = WinHttpOpen(L"FPSBooster/3.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
         WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!ses) return 0;
     WinHttpSetTimeouts(ses, 5000, 8000, 10000, 45000);
@@ -868,8 +868,8 @@ static const char* kHordeModels[] = {
     "koboldcpp/Qwen/Qwen3.5-0.8B",
     "koboldcpp/Qwen_Qwen3-0.6B-IQ4_XS",
 };
-static const wchar_t* kHordeAgent = L"apikey: 0000000000\r\nClient-Agent: FPSBooster:2.3:fps-booster-app";
-static const wchar_t* kHordeAgentRO = L"Client-Agent: FPSBooster:2.3:fps-booster-app";
+static const wchar_t* kHordeAgent = L"apikey: 0000000000\r\nClient-Agent: FPSBooster:3.0:fps-booster-app";
+static const wchar_t* kHordeAgentRO = L"Client-Agent: FPSBooster:3.0:fps-booster-app";
 // Attempt codes: 1 ok, 0 netfail, 2 httperr/fault, 4 busy (queue too long / timeout: fall through fast).
 static int AiHorde(const std::wstring& q, bool fa, std::wstring& answer) {
     std::wstring sys = fa

@@ -21,6 +21,10 @@ Everything is **backed up and reversible**, with an automatic **restore point** 
 - 🌐 **Internet page**: real ping/download/upload speed test (Cloudflare) with progress, cancel and gaming grade, public IP display, one-click gaming DNS (Cloudflare/Google/restore)
 - 🤖 **Auto-boost watcher**: library games are boosted automatically whenever they start
 - 🖥️ **Resolution switcher**: quick display resolution change with native detection
+- 🔥 **MAXIMUM FPS mode**: extreme one-click mode — all 27 tweaks, Beast Mode, background services stopped, bloat closed, resolution lowered — for the highest FPS possible, fully reversible
+- 🌐 **DNS ping & presets**: ping Cloudflare/Google/Quad9/OpenDNS/Shecan, apply the fastest, or set custom DNS (fixed v1.2 preset mix-up)
+- 🚀 **Startup manager**: enable/disable auto-start programs (registry + Startup folder)
+- 📋 **Specs snapshot**: GPU readout on System page + one-click copy of full system summary
 - 🛡️ Restore point + full backup (`backup.json`) + one-click **Undo everything**
 
 ## Download & Run
@@ -128,6 +132,10 @@ MIT — see [LICENSE](LICENSE).
 - 🌐 **صفحه اینترنت**: تست واقعی سرعت پینگ/دانلود/آپلود (کلادفلر) با پیشرفت، انصراف و رتبه گیمینگ، نمایش آی‌پی عمومی، DNS گیمینگ با یک کلیک (کلادفلر/گوگل/بازگردانی)
 - 🤖 **بوست خودکار**: بازی‌های کتابخانه هنگام اجرا خودکار بوست می‌شوند
 - 🖥️ **تعویض رزولوشن**: تغییر سریع رزولوشن نمایشگر با تشخیص پیش‌فرض
+- 🔥 **حالت بیشترین اف پی اس**: حالت افراطی با یک کلیک — هر ۲۷ توییک، Beast Mode، توقف سرویس‌های پس‌زمینه، بستن برنامه‌های اضافه، پایین آوردن رزولوشن — برای بیشترین اف‌پی‌اس ممکن، کاملا قابل بازگشت
+- 🌐 **پینگ و انتخاب DNS**: پینگ کلادفلر/گوگل/Quad9/OpenDNS/شکن، اعمال سریع‌ترین، یا ثبت DNS دلخواه (مشکل نگاشت preset در ۱٫۲ درست شد)
+- 🚀 **مدیریت استارتاپ**: فعال/غیرفعال کردن برنامه‌های خوداجرا (رجیستری + پوشه Startup)
+- 📋 **کپی مشخصات**: نمایش GPU در صفحه سیستم + کپی مشخصات کامل سیستم با یک کلیک
 - 🛡️ نقطه بازیابی + بکاپ کامل + **بازگردانی همه با یک کلیک**
 
 ## دانلود و اجرا

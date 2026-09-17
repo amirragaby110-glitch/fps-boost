@@ -122,6 +122,7 @@ int main() {
 
     // Shutdown
     NetTestCancel();
+    DnsPingCancel();
     AutoBoostStop();
     Games_RestoreAfterSession();
     Settings_Save();

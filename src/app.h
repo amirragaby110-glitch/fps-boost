@@ -65,30 +65,41 @@ enum CtrlId {
     IDC_G_LAUNCH, IDC_G_STATUS, IDC_G_TIP,
     IDC_G_AUTO = 415, IDC_G_AUTOST,
     // boost
-    IDC_B_START = 500, IDC_B_UNDO, IDC_B_PROG, IDC_B_LOG,
+    IDC_B_START = 500, IDC_B_UNDO, IDC_B_PROG, IDC_B_LOG, IDC_B_MAX,
     // tweaks
     IDC_T_LIST = 600, IDC_T_APPLY, IDC_T_REVERT, IDC_T_ALL,
     IDC_T_UNDOALL, IDC_T_DETAIL,
     // system
     IDC_S_CPU = 700, IDC_S_RAM, IDC_S_UPTIME, IDC_S_TIMER,
     IDC_S_GRAPH, IDC_S_CLEANRAM, IDC_S_CLEANTEMP, IDC_S_REFRESH,
-    IDC_S_RES = 708, IDC_S_RESAPPLY, IDC_S_RESNATIVE,
+    IDC_S_RES = 708, IDC_S_RESAPPLY, IDC_S_RESNATIVE, IDC_S_COPY,
     // help
     IDC_H_TEXT = 800,
     // settings
     IDC_SET_LANG = 900, IDC_SET_TRAY, IDC_SET_STARTUP,
     IDC_SET_FOLDER, IDC_SET_RESET, IDC_SET_ABOUT,
+    IDC_SET_STLIST, IDC_SET_STEN, IDC_SET_STDIS,
     // power page
     IDC_P_PLAN = 950, IDC_P_REFRESH, IDC_P_BEAST, IDC_P_STATUS, IDC_P_LIST,
     IDC_P_APPLYALL, IDC_P_RESTORE, IDC_P_DELETE, IDC_P_NOTE,
     // internet page
     IDC_N_START = 1100, IDC_N_CANCEL, IDC_N_PROG, IDC_N_PING, IDC_N_DOWN, IDC_N_UP,
     IDC_N_IP, IDC_N_GRADE, IDC_N_CF, IDC_N_GOOG, IDC_N_AUTO, IDC_N_DNSST, IDC_N_STATUS,
+    IDC_N_DNSLIST = 1113, IDC_N_DNSAPPLY, IDC_N_PINGALL, IDC_N_FASTEST,
+    IDC_N_PINGRES, IDC_N_C1, IDC_N_C2, IDC_N_CSET,
     // tray menu
     IDM_TRAY_OPEN = 2000, IDM_TRAY_BOOST, IDM_TRAY_EXIT,
 };
 
 // ---------- Data structures ----------
+struct StartupItem {
+    std::wstring name;
+    std::wstring cmd;
+    int  loc;      // 0 HKCU Run, 1 HKLM Run, 2 Startup folder
+    bool enabled;
+};
+std::vector<StartupItem> StartupEnum();
+bool StartupSetEnabled(const StartupItem& it, bool on);
 struct GameProfile {
     std::wstring name;
     std::wstring path;
@@ -195,6 +206,8 @@ bool ParseJson(const std::string& text, JVal& out);
 // ---------- sysinfo.cpp ----------
 std::wstring SysCpuName();
 std::wstring SysGpuName();
+std::wstring SysSummary();
+bool CopyTextToClipboard(const std::wstring& s);
 std::wstring SysRamString();
 std::wstring SysOsString();
 std::wstring SysUptimeString();
@@ -309,10 +322,20 @@ void NetTestRun(HWND notifyWnd);
 void NetTestCancel();
 bool NetTestBusy();
 bool NetGetIP(std::wstring& ip);
+// preset: 0 restore/auto, 1 cloudflare, 2 google, 3 quad9, 4 opendns, 5 shecan
 bool DnsSetPreset(int preset);
+bool DnsSetCustom(const wchar_t* d1, const wchar_t* d2);
+void DnsPingAll(HWND notifyWnd);
+void DnsPingCancel();
+bool DnsPingBusy();
 std::wstring DnsCurrent();
 
 // ---------- watch.cpp ----------
+// ---------- maxfps.cpp ----------
+void MaxFpsRun(HWND notifyWnd);
+void MaxFpsUndo(HWND notifyWnd);
+bool MaxFpsIsActive();
+
 void AutoBoostStart(HWND notifyWnd);
 void AutoBoostStop();
 bool AutoBoostWatching();

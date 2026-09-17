@@ -6,6 +6,7 @@
 #include "app.h"
 #include <winhttp.h>
 #include <iphlpapi.h>
+#include <icmpapi.h>
 #include <string.h>
 
 #define NET_HOST L"speed.cloudflare.com"
@@ -287,13 +288,15 @@ static void DnsFlush() {
     RunHidden(JoinPath(sysdir, L"ipconfig.exe").c_str(), L"/flushdns");
 }
 
-// preset: 0 cloudflare, 1 google, 2 restore original (or dhcp)
+// preset: 0 restore/auto, 1 cloudflare, 2 google, 3 quad9, 4 opendns, 5 shecan
+static const wchar_t* kDns1[] = {L"1.1.1.1", L"8.8.8.8", L"9.9.9.9", L"208.67.222.222", L"178.22.122.100"};
+static const wchar_t* kDns2[] = {L"1.0.0.1", L"8.8.4.4", L"149.112.112.112", L"208.67.220.220", L"185.51.200.2"};
 bool DnsSetPreset(int preset) {
     std::vector<DnsAd> ads;
     if (!DnsEnum(ads)) return false;
     DnsBackupOnce(ads);
     int ok = 0;
-    if (preset == 2) {
+    if (preset == 0) {
         // restore from backup if available
         std::string text;
         JVal root;
@@ -326,8 +329,9 @@ bool DnsSetPreset(int preset) {
             if (done) ok++;
         }
     } else {
-        const wchar_t* d1 = (preset == 0) ? L"1.1.1.1" : L"8.8.8.8";
-        const wchar_t* d2 = (preset == 0) ? L"1.0.0.1" : L"8.8.4.4";
+        if (preset < 1 || preset > 5) return false;
+        const wchar_t* d1 = kDns1[preset - 1];
+        const wchar_t* d2 = kDns2[preset - 1];
         for (size_t i = 0; i < ads.size(); i++)
             if (NetshDns(ads[i].name, d1, d2)) ok++;
     }
@@ -351,3 +355,72 @@ std::wstring DnsCurrent() {
     if (ads.size() > 1) s += WFormat(L" +%d", (int)ads.size() - 1);
     return s;
 }
+
+// ================= Custom DNS + ping =================
+static bool ValidIpv4(const wchar_t* s) {
+    if (!s || !*s) return false;
+    int dots = 0;
+    for (const wchar_t* p = s; *p; p++) {
+        if (*p == L'.') dots++;
+        else if (*p < L'0' || *p > L'9') return false;
+    }
+    return dots == 3;
+}
+bool DnsSetCustom(const wchar_t* d1, const wchar_t* d2) {
+    if (!ValidIpv4(d1)) return false;
+    if (d2 && *d2 && !ValidIpv4(d2)) return false;
+    std::vector<DnsAd> ads;
+    if (!DnsEnum(ads)) return false;
+    DnsBackupOnce(ads);
+    int ok = 0;
+    for (size_t i = 0; i < ads.size(); i++)
+        if (NetshDns(ads[i].name, d1, (d2 && *d2) ? d2 : NULL)) ok++;
+    if (ok > 0) { DnsFlush(); LogW(L"Custom DNS applied on %d adapter(s)", ok); }
+    return ok > 0;
+}
+
+static bool g_pingBusy = false;
+static bool g_pingCancel = false;
+
+static int PingAvgMs(const wchar_t* ip) {
+    IN_ADDR a;
+    if (InetPtonW(AF_INET, ip, &a) != 1) return -1;
+    HANDLE h = IcmpCreateFile();
+    if (h == INVALID_HANDLE_VALUE) return -1;
+    char send[32];
+    memset(send, 'E', sizeof(send));
+    char reply[sizeof(ICMP_ECHO_REPLY) + 64];
+    int sum = 0, n = 0;
+    for (int i = 0; i < 3 && !g_pingCancel; i++) {
+        DWORD r = IcmpSendEcho(h, a.S_un.S_addr, send, sizeof(send), NULL, reply, sizeof(reply), 1200);
+        if (r > 0) {
+            ICMP_ECHO_REPLY* e = (ICMP_ECHO_REPLY*)reply;
+            if (e->Status == IP_SUCCESS) { sum += (int)e->RoundTripTime; n++; }
+        }
+    }
+    IcmpCloseHandle(h);
+    return n ? sum / n : -1;
+}
+struct PingCtx { HWND w; };
+static DWORD WINAPI PingThread(LPVOID arg) {
+    PingCtx* c = (PingCtx*)arg;
+    HWND w = c->w;
+    delete c;
+    for (int i = 0; i < 5 && !g_pingCancel; i++) {
+        int ms = PingAvgMs(kDns1[i]);
+        PostMessageW(w, WM_APP_NET, (WPARAM)(10 + i), (LPARAM)ms);
+    }
+    g_pingBusy = false;
+    PostMessageW(w, WM_APP_NET, (WPARAM)15, 0);
+    return 0;
+}
+void DnsPingAll(HWND notifyWnd) {
+    if (g_pingBusy) return;
+    g_pingBusy = true;
+    g_pingCancel = false;
+    PingCtx* c = new PingCtx; c->w = notifyWnd;
+    HANDLE h = CreateThread(NULL, 0, PingThread, c, 0, NULL);
+    if (h) CloseHandle(h);
+}
+void DnsPingCancel() { g_pingCancel = true; }
+bool DnsPingBusy() { return g_pingBusy; }

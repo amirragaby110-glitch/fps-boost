@@ -1,6 +1,7 @@
 // FPS Booster Pro - System information & low-level actions
 #include "app.h"
 #include <stdio.h>
+#include <shlobj.h>
 
 // ---------- Basic info ----------
 std::wstring SysCpuName() {
@@ -498,4 +499,127 @@ bool GetNativeResolution(int& w, int& h) {
         if (area > best) { best = area; w = dm.dmPelsWidth; h = dm.dmPelsHeight; }
     }
     return w > 0;
+}
+
+// ---------- Startup manager ----------
+static const wchar_t* kRunSub = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run";
+static const wchar_t* kRunBkSub = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunDisabledByFPS";
+
+static void StartupEnumKey(HKEY root, int loc, std::vector<StartupItem>& out) {
+    HKEY h = NULL;
+    if (RegOpenKeyExW(root, kRunSub, 0, KEY_READ, &h) == ERROR_SUCCESS) {
+        wchar_t name[256];
+        BYTE data[1024];
+        for (DWORD i = 0; ; i++) {
+            DWORD nl = 256, dl = sizeof(data), tp = 0;
+            if (RegEnumValueW(h, i, name, &nl, NULL, &tp, data, &dl) != ERROR_SUCCESS) break;
+            if (tp != REG_SZ && tp != REG_EXPAND_SZ) continue;
+            StartupItem it;
+            it.name = name; it.cmd = (wchar_t*)data; it.loc = loc; it.enabled = true;
+            out.push_back(it);
+        }
+        RegCloseKey(h);
+    }
+    if (RegOpenKeyExW(root, kRunBkSub, 0, KEY_READ, &h) == ERROR_SUCCESS) {
+        wchar_t name[256];
+        BYTE data[1024];
+        for (DWORD i = 0; ; i++) {
+            DWORD nl = 256, dl = sizeof(data), tp = 0;
+            if (RegEnumValueW(h, i, name, &nl, NULL, &tp, data, &dl) != ERROR_SUCCESS) break;
+            StartupItem it;
+            it.name = name; it.cmd = (wchar_t*)data; it.loc = loc; it.enabled = false;
+            out.push_back(it);
+        }
+        RegCloseKey(h);
+    }
+}
+std::vector<StartupItem> StartupEnum() {
+    std::vector<StartupItem> out;
+    StartupEnumKey(HKEY_CURRENT_USER, 0, out);
+    StartupEnumKey(HKEY_LOCAL_MACHINE, 1, out);
+    wchar_t path[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_STARTUP, NULL, 0, path))) {
+        std::wstring dis = JoinPath(path, L"DisabledByFPS");
+        WIN32_FIND_DATAW fd;
+        HANDLE f = FindFirstFileW(JoinPath(path, L"*.lnk").c_str(), &fd);
+        if (f != INVALID_HANDLE_VALUE) {
+            do {
+                if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+                StartupItem it;
+                it.name = fd.cFileName; it.cmd = JoinPath(path, fd.cFileName);
+                it.loc = 2; it.enabled = true;
+                out.push_back(it);
+            } while (FindNextFileW(f, &fd));
+            FindClose(f);
+        }
+        f = FindFirstFileW(JoinPath(dis, L"*.lnk").c_str(), &fd);
+        if (f != INVALID_HANDLE_VALUE) {
+            do {
+                if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+                StartupItem it;
+                it.name = fd.cFileName; it.cmd = JoinPath(dis, fd.cFileName);
+                it.loc = 2; it.enabled = false;
+                out.push_back(it);
+            } while (FindNextFileW(f, &fd));
+            FindClose(f);
+        }
+    }
+    return out;
+}
+bool StartupSetEnabled(const StartupItem& it, bool on) {
+    if (it.enabled == on) return true;
+    if (it.loc == 2) {
+        wchar_t path[MAX_PATH];
+        if (FAILED(SHGetFolderPathW(NULL, CSIDL_STARTUP, NULL, 0, path))) return false;
+        std::wstring dis = JoinPath(path, L"DisabledByFPS");
+        EnsureDir(dis);
+        std::wstring src = on ? JoinPath(dis, it.name) : JoinPath(path, it.name);
+        std::wstring dst = on ? JoinPath(path, it.name) : JoinPath(dis, it.name);
+        return MoveFileW(src.c_str(), dst.c_str()) != FALSE;
+    }
+    HKEY root = (it.loc == 0) ? HKEY_CURRENT_USER : HKEY_LOCAL_MACHINE;
+    const wchar_t* from = on ? kRunBkSub : kRunSub;
+    const wchar_t* to = on ? kRunSub : kRunBkSub;
+    std::wstring v;
+    if (!RegGetString(root, from, it.name.c_str(), v)) return false;
+    HKEY h = NULL;
+    if (RegCreateKeyExW(root, to, 0, NULL, 0, KEY_WRITE, NULL, &h, NULL) != ERROR_SUCCESS) return false;
+    LSTATUS r = RegSetValueExW(h, it.name.c_str(), 0, REG_SZ,
+        (const BYTE*)v.c_str(), (DWORD)((v.size() + 1) * 2));
+    RegCloseKey(h);
+    if (r != ERROR_SUCCESS) return false;
+    HKEY h2 = NULL;
+    if (RegOpenKeyExW(root, from, 0, KEY_WRITE, &h2) == ERROR_SUCCESS) {
+        RegDeleteValueW(h2, it.name.c_str());
+        RegCloseKey(h2);
+    }
+    return true;
+}
+
+// ---------- Specs summary ----------
+std::wstring SysSummary() {
+    std::wstring os = L"Windows", dv, bld;
+    RegGetString(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", L"ProductName", os);
+    if (!RegGetString(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", L"DisplayVersion", dv))
+        RegGetString(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", L"ReleaseId", dv);
+    RegGetString(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", L"CurrentBuild", bld);
+    int w = 0, h = 0;
+    GetCurrentResolution(w, h);
+    std::wstring s = WFormat(L"%s %s (build %s)\r\nCPU: %s (%d cores)\r\nRAM: %s\r\nGPU: %s\r\nDisplay: %dx%d\r\nFPS Booster score: %d/100",
+        os.c_str(), dv.c_str(), bld.c_str(), SysCpuName().c_str(), SysCpuCount(),
+        SysRamString().c_str(), SysGpuName().c_str(), w, h, g_lastScore);
+    return s;
+}
+bool CopyTextToClipboard(const std::wstring& s) {
+    if (!OpenClipboard(NULL)) return false;
+    EmptyClipboard();
+    size_t n = (s.size() + 1) * 2;
+    HGLOBAL g = GlobalAlloc(GMEM_MOVEABLE, n);
+    if (!g) { CloseClipboard(); return false; }
+    memcpy(GlobalLock(g), s.c_str(), n);
+    GlobalUnlock(g);
+    bool ok = SetClipboardData(CF_UNICODETEXT, g) != NULL;
+    if (!ok) GlobalFree(g);
+    CloseClipboard();
+    return ok;
 }

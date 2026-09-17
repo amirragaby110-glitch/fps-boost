@@ -263,11 +263,12 @@ static HWND hGamesList, hGamesPrio, hGamesAff, hGamesGpu, hGamesFso, hGamesArgs,
             hGamesTimer, hGamesPower, hGamesKill, hGamesStatus, hGamesTip, hGamesLaunch;
 static int g_gameSel = -1;
 static bool g_gamesLoading = false;
-static HWND hBoostLog, hBoostProg, hBoostStart, hBoostUndo;
+static HWND hBoostLog, hBoostProg, hBoostStart, hBoostUndo, hBoostMax;
 static HWND hTweakList, hTweakDetail, hTweakApply, hTweakRevert, hTweakAll, hTweakUndoAll;
 static HWND hSysCpu, hSysRam, hSysUp, hSysTimer, hSysGraph;
 static HWND hHelpText;
 static HWND hSetLang, hSetTray, hSetStartup;
+static HWND hSetStList = NULL;
 static int g_cpuHist[90], g_ramHist[90], g_histN = 0;
 static CpuMeter* g_meter = NULL;
 
@@ -435,6 +436,7 @@ static void BuildBoost(HWND p) {
     SetLabel(d, T(SID_B_SUB), COL_MUTED);
     hBoostStart = MkCTA(p, IDC_B_START, 0, 44, 340, 56, SID_B_START);
     hBoostUndo = MkButton(p, IDC_B_UNDO, 360, 44, 220, 56, SID_B_UNDO);
+    hBoostMax = MkCTA(p, IDC_B_MAX, 600, 44, 292, 56, SID_B_MAXFPS);
     hBoostProg = Mk(p, PROGRESS_CLASSW, L"", WS_CHILD | WS_VISIBLE | PBS_SMOOTH, 0,
         0, 114, 892, 26, IDC_B_PROG, NULL);
     SendMessageW(hBoostProg, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
@@ -452,6 +454,7 @@ void UI_BoostProgress(int pct) {
 void UI_BoostDone(bool ok) {
     EnableWindow(hBoostStart, TRUE);
     EnableWindow(hBoostUndo, TRUE);
+    EnableWindow(hBoostMax, TRUE);
     wchar_t nb[128];
     StringCchPrintfW(nb, 128, L"%s", ok ? T(SID_B_DONE) : T(SID_B_FAIL));
     SetWindowTextW(hStatusBar, nb);
@@ -502,6 +505,7 @@ static void BuildTweaks(HWND p) {
 
 // ---------- System ----------
 static HWND hSysRes = NULL;
+static HWND hSysGpu = NULL;
 static void SysRefresh() {
     if (!g_meter) g_meter = new CpuMeter();
     int cpu = g_meter->sample();
@@ -519,6 +523,7 @@ static void SysRefresh() {
     ULONG cur = 0, mn = 0, mx = 0;
     if (TimerQuery(cur, mn, mx))
         SetLabel(hSysTimer, WFormat(L"%s: %.1f ms", T(SID_S_TIMER), cur / 10000.0), COL_TEXT);
+    if (hSysGpu) SetLabel(hSysGpu, WFormat(L"%s: %s", T(SID_S_GPU), SysGpuName().c_str()), COL_TEXT);
     if (hSysGraph) InvalidateRect(hSysGraph, NULL, TRUE);
 }
 static void BuildSystem(HWND p) {
@@ -526,11 +531,13 @@ static void BuildSystem(HWND p) {
     hSysRam = MkLabel(p, 0, 34, 440, 30, g_hFontBig);
     hSysUp = MkLabel(p, 452, 0, 440, 30);
     hSysTimer = MkLabel(p, 452, 34, 440, 30);
+    hSysGpu = MkLabel(p, 0, 66, 892, 24);
     hSysGraph = Mk(p, WC_STATICW, L"", WS_CHILD | WS_VISIBLE | SS_OWNERDRAW | WS_BORDER, 0,
-        0, 74, 892, 330, IDC_S_GRAPH, NULL);
+        0, 92, 892, 312, IDC_S_GRAPH, NULL);
     MkButton(p, IDC_S_CLEANRAM, 0, 416, 220, 38, SID_S_CLEAN_RAM);
     MkButton(p, IDC_S_CLEANTEMP, 232, 416, 220, 38, SID_S_CLEAN_TEMP);
     MkButton(p, IDC_S_REFRESH, 464, 416, 240, 38, SID_S_MAXREFRESH);
+    MkButton(p, IDC_S_COPY, 716, 416, 176, 38, SID_S_COPY);
     HWND lr = MkLabel(p, 0, 466, 130, 28); SetWindowTextW(lr, T(SID_S_RES));
     hSysRes = MkCombo(p, IDC_S_RES, 140, 464, 200);
     const wchar_t* res[] = {L"1280x720", L"1366x768", L"1600x900", L"1920x1080", L"2560x1440", L"3840x2160"};
@@ -591,7 +598,15 @@ static const char* kHelpEN =
 "- Automatic (restore) brings back your original DNS.\r\n"
 "\r\n8) AUTO-BOOST + DISPLAY\r\n"
 "- My Games: enable Auto-boost to speed up library games on launch.\r\n"
-"- System page: quick resolution switcher (Native = recommended).\r\n";
+"- System page: quick resolution switcher (Native = recommended).\r\n"
+"\r\n9) MAXIMUM FPS MODE\r\n"
+"- Boost page: MAXIMUM FPS button does EVERYTHING for the highest FPS possible.\r\n"
+"- Applies all 27 tweaks, Beast Mode, stops background services, closes bloat,\r\n"
+"  and even lowers resolution. Undo restores everything.\r\n"
+"\r\n10) DNS PING + STARTUP\r\n"
+"- Internet page: Ping all compares 5 DNS servers, Apply fastest uses the best.\r\n"
+"- Custom DNS boxes accept any IPv4 pair.\r\n"
+"- Settings page: Startup manager enables/disables auto-start programs.\r\n";
 static const char* kHelpFA =
 "راهنمای FPS BOOSTER PRO\r\n"
 "================================\r\n\r\n"
@@ -635,7 +650,15 @@ static const char* kHelpFA =
 "- گزینه خودکار DNS اصلی شما را برمی‌گرداند.\r\n"
 "\r\n۸) بوست خودکار + نمایشگر\r\n"
 "- در بازی‌ها: بوست خودکار بازی‌های کتابخانه هنگام اجرا.\r\n"
-"- صفحه سیستم: تعویض سریع رزولوشن (Native = پیشنهادی).\r\n";
+"- صفحه سیستم: تعویض سریع رزولوشن (Native = پیشنهادی).\r\n"
+"\r\n۹) حالت بیشترین اف‌پی‌اس\r\n"
+"- صفحه بوست: دکمه بیشترین اف پی اس همه کارها را برای بالاترین اف‌پی‌اس می‌کند.\r\n"
+"- هر ۲۷ توییک، Beast Mode، توقف سرویس‌ها، بستن برنامه‌های اضافه و حتی\r\n"
+"  پایین آوردن رزولوشن. Undo همه چیز را برمی‌گرداند.\r\n"
+"\r\n۱۰) پینگ DNS + استارتاپ\r\n"
+"- صفحه اینترنت: پینگ همه ۵ سرور DNS را مقایسه می‌کند و سریع‌ترین اعمال می‌شود.\r\n"
+"- کادرهای DNS دلخواه هر IPv4 را قبول می‌کنند.\r\n"
+"- صفحه تنظیمات: مدیریت استارتاپ برنامه‌های خوداجرا را فعال/غیرفعال می‌کند.\r\n";
 static void BuildHelp(HWND p) {
     hHelpText = MkEdit(p, IDC_H_TEXT, 0, 0, 892, 590, true, true);
     SetWindowTextW(hHelpText, Utf8ToWide(Strings_GetLang() == 1 ? kHelpFA : kHelpEN).c_str());
@@ -649,6 +672,17 @@ static void UI_SetLanguage(int lang) {
     Settings_Save();
     SetStartupRun(IsChecked(hSetStartup));
     MessageBoxW(g_hMain, T(SID_SET_RESTART_LANG), T(SID_APP_NAME), MB_OK | MB_ICONINFORMATION);
+}
+static std::vector<StartupItem> g_stItems;
+static void StartupFillList() {
+    if (!hSetStList) return;
+    g_stItems = StartupEnum();
+    ListView_DeleteAllItems(hSetStList);
+    for (size_t i = 0; i < g_stItems.size(); i++) {
+        int r = LVAddRow(hSetStList, (int)i, g_stItems[i].name.c_str());
+        LVSet(hSetStList, r, 1, T(g_stItems[i].enabled ? SID_ST_ON : SID_ST_OFF));
+        LVSetData(hSetStList, r, (LPARAM)i);
+    }
 }
 static void BuildSettings(HWND p) {
     HWND l1 = MkLabel(p, 0, 8, 200, 26); SetWindowTextW(l1, T(SID_SET_LANG));
@@ -665,6 +699,14 @@ static void BuildSettings(HWND p) {
     MkButton(p, IDC_SET_RESET, 0, 174, 240, 34, SID_SET_RESET);
     HWND ab = MkLabel(p, 0, 230, 892, 30);
     SetLabel(ab, T(SID_SET_ABOUT), COL_MUTED);
+    MkHeader(p, 0, 268, 400, SID_SET_STARTUP_T);
+    hSetStList = MkList(p, IDC_SET_STLIST, 0, 300, 892, 250);
+    int sids[] = {SID_SET_ST_COL1, SID_SET_ST_COL2};
+    int swd[] = {640, 220};
+    LVCols(hSetStList, sids, swd, 2);
+    MkButton(p, IDC_SET_STEN, 0, 560, 160, 34, SID_SET_ST_ENABLE);
+    MkButton(p, IDC_SET_STDIS, 170, 560, 160, 34, SID_SET_ST_DISABLE);
+    StartupFillList();
 }
 
 // ---------- Power ----------
@@ -715,6 +757,9 @@ static void BuildPower(HWND p) {
 static HWND hNetStatus = NULL, hNetProg = NULL, hNetPing = NULL, hNetDown = NULL;
 static HWND hNetUp = NULL, hNetIp = NULL, hNetGrade = NULL, hNetDnsSt = NULL;
 static HWND hNetStart = NULL, hNetCancel = NULL;
+static HWND hNetDns = NULL, hNetDnsApply = NULL, hNetPingAll = NULL, hNetFastest = NULL;
+static HWND hNetPingRes = NULL, hNetC1 = NULL, hNetC2 = NULL;
+static int g_dnsPingMs[5] = {-1, -1, -1, -1, -1};
 static void NetRefresh() {
     if (!hNetDnsSt) return;
     SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_TEXT);
@@ -744,10 +789,28 @@ static void BuildNet(HWND p) {
     EnableWindow(hNetCancel, FALSE);
     MkHeader(p, 0, 248, 400, SID_N_DNS_T);
     hNetDnsSt = MkLabel(p, 0, 278, 892, 26);
-    HWND cf = MkButton(p, IDC_N_CF, 0, 310, 280, 38, SID_N_DNS_CF);
-    HWND gg = MkButton(p, IDC_N_GOOG, 300, 310, 280, 38, SID_N_DNS_GOOG);
-    HWND au = MkButton(p, IDC_N_AUTO, 600, 310, 292, 38, SID_N_DNS_AUTO);
-    if (!g_isAdmin) { EnableWindow(cf, FALSE); EnableWindow(gg, FALSE); EnableWindow(au, FALSE); }
+    hNetDns = MkCombo(p, IDC_N_DNSLIST, 0, 308, 300);
+    SendMessageW(hNetDns, CB_ADDSTRING, 0, (LPARAM)T(SID_N_DNS_AUTO));
+    SendMessageW(hNetDns, CB_ADDSTRING, 0, (LPARAM)T(SID_N_DNS_CF));
+    SendMessageW(hNetDns, CB_ADDSTRING, 0, (LPARAM)T(SID_N_DNS_GOOG));
+    SendMessageW(hNetDns, CB_ADDSTRING, 0, (LPARAM)T(SID_N_DNS_Q9));
+    SendMessageW(hNetDns, CB_ADDSTRING, 0, (LPARAM)T(SID_N_DNS_ODNS));
+    SendMessageW(hNetDns, CB_ADDSTRING, 0, (LPARAM)T(SID_N_DNS_SHECAN));
+    SendMessageW(hNetDns, CB_ADDSTRING, 0, (LPARAM)T(SID_N_DNS_CUSTOMITEM));
+    SendMessageW(hNetDns, CB_SETCURSEL, 0, 0);
+    hNetDnsApply = MkButton(p, IDC_N_DNSAPPLY, 310, 306, 110, 34, SID_S_RES_APPLY);
+    hNetPingAll = MkButton(p, IDC_N_PINGALL, 430, 306, 130, 34, SID_N_DNS_PING);
+    hNetFastest = MkButton(p, IDC_N_FASTEST, 570, 306, 200, 34, SID_N_DNS_FASTEST);
+    EnableWindow(hNetFastest, FALSE);
+    hNetPingRes = MkEdit(p, IDC_N_PINGRES, 0, 348, 892, 96, true, true);
+    HWND lc = MkLabel(p, 0, 452, 140, 28); SetWindowTextW(lc, T(SID_N_DNS_CUSTOM));
+    hNetC1 = MkEdit(p, IDC_N_C1, 150, 450, 170, 28);
+    hNetC2 = MkEdit(p, IDC_N_C2, 330, 450, 170, 28);
+    HWND cset = MkButton(p, IDC_N_CSET, 510, 448, 130, 34, SID_N_DNS_SET);
+    if (!g_isAdmin) {
+        EnableWindow(hNetDnsApply, FALSE); EnableWindow(hNetFastest, FALSE);
+        EnableWindow(cset, FALSE);
+    }
     SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_TEXT);
 }
 
@@ -1113,9 +1176,23 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
                 g_boosting = true;
                 EnableWindow(hBoostStart, FALSE);
                 EnableWindow(hBoostUndo, FALSE);
+                EnableWindow(hBoostMax, FALSE);
                 SendMessageW(hBoostLog, LB_RESETCONTENT, 0, 0);
                 SetWindowTextW(hStatusBar, T(SID_B_WORKING));
                 BoostRun(g_hMain);
+            }
+            break;
+        case IDC_B_MAX:
+            if (!g_boosting && !g_inGame) {
+                if (MessageBoxW(h, T(SID_B_MAXFPS_WARN), T(SID_APP_NAME), MB_YESNO | MB_ICONWARNING) == IDYES) {
+                    g_boosting = true;
+                    EnableWindow(hBoostStart, FALSE);
+                    EnableWindow(hBoostUndo, FALSE);
+                    EnableWindow(hBoostMax, FALSE);
+                    SendMessageW(hBoostLog, LB_RESETCONTENT, 0, 0);
+                    SetWindowTextW(hStatusBar, T(SID_B_WORKING));
+                    MaxFpsRun(g_hMain);
+                }
             }
             break;
         case IDC_B_UNDO:
@@ -1125,7 +1202,9 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
                     EnableWindow(hBoostStart, FALSE);
                     EnableWindow(hBoostUndo, FALSE);
                     SendMessageW(hBoostLog, LB_RESETCONTENT, 0, 0);
-                    BoostUndo(g_hMain);
+                    EnableWindow(hBoostMax, FALSE);
+                    if (MaxFpsIsActive()) MaxFpsUndo(g_hMain);
+                    else BoostUndo(g_hMain);
                 }
             }
             break;
@@ -1208,6 +1287,10 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             } else SetWindowTextW(hStatusBar, T(SID_B_FAIL));
             break;
         }
+        case IDC_S_COPY:
+            if (CopyTextToClipboard(SysSummary())) SetWindowTextW(hStatusBar, T(SID_S_COPIED));
+            else SetWindowTextW(hStatusBar, T(SID_B_FAIL));
+            break;
         case IDC_SET_LANG:
             if (code == CBN_SELCHANGE)
                 SetLangAndAsk((int)SendMessageW(hSetLang, CB_GETCURSEL, 0, 0));
@@ -1227,6 +1310,18 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
                 SetStartupRun(IsChecked(hSetStartup));
             }
             break;
+        case IDC_SET_STEN:
+        case IDC_SET_STDIS: {
+            if (g_boosting) break;
+            int sel = ListView_GetNextItem(hSetStList, -1, LVNI_SELECTED);
+            if (sel < 0) break;
+            size_t i = (size_t)LVGetData(hSetStList, sel);
+            if (i >= g_stItems.size()) break;
+            bool on = (id == IDC_SET_STEN);
+            if (StartupSetEnabled(g_stItems[i], on)) StartupFillList();
+            else SetWindowTextW(hStatusBar, T(SID_B_FAIL));
+            break;
+        }
         case IDC_SET_FOLDER:
             ShellExecuteW(NULL, L"open", g_dataDir.c_str(), NULL, NULL, SW_SHOWNORMAL);
             break;
@@ -1282,15 +1377,45 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         case IDC_N_CANCEL:
             NetTestCancel();
             break;
-        case IDC_N_CF:
-            if (DnsSetPreset(1)) SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_GREEN);
+        case IDC_N_DNSAPPLY: {
+            int si = (int)SendMessageW(hNetDns, CB_GETCURSEL, 0, 0);
+            if (si >= 0 && si <= 5) {
+                DnsPingCancel();
+                if (DnsSetPreset(si)) SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_GREEN);
+            } else if (si == 6) {
+                wchar_t d1[64], d2[64]; d1[0] = 0; d2[0] = 0;
+                GetWindowTextW(hNetC1, d1, 64); GetWindowTextW(hNetC2, d2, 64);
+                if (DnsSetCustom(d1, d2)) SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_GREEN);
+            }
             break;
-        case IDC_N_GOOG:
-            if (DnsSetPreset(2)) SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_GREEN);
+        }
+        case IDC_N_PINGALL:
+            if (!DnsPingBusy()) {
+                for (int i = 0; i < 5; i++) g_dnsPingMs[i] = -1;
+                SetWindowTextW(hNetPingRes, T(SID_N_PINGING));
+                EnableWindow(hNetFastest, FALSE);
+                DnsPingAll(g_hMain);
+            }
             break;
-        case IDC_N_AUTO:
-            if (DnsSetPreset(0)) SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_GREEN);
+        case IDC_N_FASTEST: {
+            int bi = -1;
+            for (int i = 0; i < 5; i++)
+                if (g_dnsPingMs[i] >= 0 && (bi < 0 || g_dnsPingMs[i] < g_dnsPingMs[bi])) bi = i;
+            if (bi >= 0) {
+                SendMessageW(hNetDns, CB_SETCURSEL, bi + 1, 0);
+                if (DnsSetPreset(bi + 1)) SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_GREEN);
+            }
             break;
+        }
+        case IDC_N_CSET: {
+            wchar_t d1[64], d2[64]; d1[0] = 0; d2[0] = 0;
+            GetWindowTextW(hNetC1, d1, 64); GetWindowTextW(hNetC2, d2, 64);
+            if (DnsSetCustom(d1, d2)) {
+                SendMessageW(hNetDns, CB_SETCURSEL, 6, 0);
+                SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_GREEN);
+            }
+            break;
+        }
         case IDM_TRAY_OPEN:
             UI_TrayShow(true);
             break;
@@ -1426,6 +1551,32 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             EnableWindow(hNetStart, TRUE);
             EnableWindow(hNetCancel, FALSE);
         }
+        else if (phase >= 10 && phase <= 14) {
+            int idx = phase - 10;
+            int ms = (int)l;
+            g_dnsPingMs[idx] = ms;
+            static StrId dn[] = {SID_N_DNS_CF, SID_N_DNS_GOOG, SID_N_DNS_Q9, SID_N_DNS_ODNS, SID_N_DNS_SHECAN};
+            wchar_t cur[1024]; cur[0] = 0;
+            GetWindowTextW(hNetPingRes, cur, 1024);
+            std::wstring s = cur;
+            if (s == T(SID_N_PINGING)) s.clear();
+            if (!s.empty()) s += L"\r\n";
+            s += WFormat(L"%s: %s", T(dn[idx]), ms >= 0 ? WFormat(L"%d ms", ms).c_str() : L"--");
+            SetWindowTextW(hNetPingRes, s.c_str());
+        }
+        else if (phase == 15) {
+            int bi = -1;
+            for (int i = 0; i < 5; i++)
+                if (g_dnsPingMs[i] >= 0 && (bi < 0 || g_dnsPingMs[i] < g_dnsPingMs[bi])) bi = i;
+            if (bi >= 0) {
+                wchar_t cur[1024]; cur[0] = 0;
+                GetWindowTextW(hNetPingRes, cur, 1024);
+                std::wstring s = cur;
+                s += WFormat(L"\r\n* %s", T(SID_N_DNS_FASTEST));
+                SetWindowTextW(hNetPingRes, s.c_str());
+                if (g_isAdmin) EnableWindow(hNetFastest, TRUE);
+            }
+        }
         break;
     }
     case WM_APP_AUTO: {
@@ -1478,10 +1629,11 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         MoveWindow(hTweakRevert, S(170), by, S(160), S(34), TRUE);
         MoveWindow(hTweakAll, S(340), by, S(230), S(34), TRUE);
         MoveWindow(hTweakUndoAll, S(580), by, S(160), S(34), TRUE);
-        MoveWindow(hSysGraph, 0, S(74), pw, ph - S(74) - S(120), TRUE);
+        MoveWindow(hSysGraph, 0, S(92), pw, ph - S(92) - S(120), TRUE);
         MoveWindow(GetDlgItem(g_hPages[PAGE_SYSTEM], IDC_S_CLEANRAM), 0, ph - S(100), S(220), S(38), TRUE);
         MoveWindow(GetDlgItem(g_hPages[PAGE_SYSTEM], IDC_S_CLEANTEMP), S(232), ph - S(100), S(220), S(38), TRUE);
         MoveWindow(GetDlgItem(g_hPages[PAGE_SYSTEM], IDC_S_REFRESH), S(464), ph - S(100), S(240), S(38), TRUE);
+        MoveWindow(GetDlgItem(g_hPages[PAGE_SYSTEM], IDC_S_COPY), S(716), ph - S(100), S(176), S(38), TRUE);
         MoveWindow(hHelpText, 0, 0, pw, ph - S(8), TRUE);
         MoveWindow(hNetProg, 0, S(60), pw, S(26), TRUE);
         MoveWindow(hPowList, 0, S(140), pw, ph - S(140) - S(60), TRUE);

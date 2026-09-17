@@ -2,6 +2,7 @@
 #include "app.h"
 #include <stdio.h>
 #include <shlobj.h>
+#include <dxgi.h>
 
 // ---------- Basic info ----------
 std::wstring SysCpuName() {
@@ -25,23 +26,45 @@ int SysCpuCount() {
     SYSTEM_INFO si; GetSystemInfo(&si);
     return (int)si.dwNumberOfProcessors;
 }
+int SysCpuMHz() {
+    DWORD mhz = 0;
+    RegGetDword(HKEY_LOCAL_MACHINE, L"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", L"~MHz", mhz);
+    return (int)mhz;
+}
+int SysGpuVramMB() {
+    IDXGIFactory* f = NULL;
+    if (FAILED(CreateDXGIFactory(IID_IDXGIFactory, (void**)&f)) || !f) return 0;
+    SIZE_T best = 0;
+    for (UINT i = 0; ; i++) {
+        IDXGIAdapter* a = NULL;
+        if (f->EnumAdapters(i, &a) != S_OK || !a) break;
+        DXGI_ADAPTER_DESC d;
+        if (a->GetDesc(&d) == S_OK && d.VendorId != 0x1414 && d.DedicatedVideoMemory > best)
+            best = d.DedicatedVideoMemory;
+        a->Release();
+    }
+    f->Release();
+    return (int)(best / (1024 * 1024));
+}
 std::wstring SysGpuName() {
-    // First display adapter DriverDesc
+    // Prefer a discrete GPU over the integrated one (laptops list Intel first).
     const wchar_t* cls = L"SYSTEM\\CurrentControlSet\\Control\\Class\\{4D36E968-E325-11CE-BFC1-08002BE10318}";
+    std::wstring first, best;
     for (int i = 0; i < 8; i++) {
         wchar_t sub[256];
         StringCchPrintfW(sub, 256, L"%s\\%04d", cls, i);
-        std::wstring desc, drv;
-        if (RegGetString(HKEY_LOCAL_MACHINE, sub, L"DriverDesc", desc)) {
-            if (RegGetString(HKEY_LOCAL_MACHINE, sub, L"ProviderName", drv) &&
-                drv.find(L"Microsoft") != std::wstring::npos && i > 0) {
-                // skip basic display driver if a real one exists later; keep looking
-                continue;
-            }
-            return desc;
-        }
+        std::wstring desc;
+        if (!RegGetString(HKEY_LOCAL_MACHINE, sub, L"DriverDesc", desc) || desc.empty()) continue;
+        if (first.empty()) first = desc;
+        std::wstring low = ToLower(desc);
+        if (low.find(L"nvidia") != std::wstring::npos ||
+            low.find(L"radeon rx") != std::wstring::npos ||
+            low.find(L"radeon pro") != std::wstring::npos ||
+            low.find(L" arc ") != std::wstring::npos ||
+            low.find(L"quadro") != std::wstring::npos) { best = desc; break; }
     }
-    return L"Unknown GPU";
+    if (!best.empty()) return best;
+    return first.empty() ? L"Unknown GPU" : first;
 }
 std::wstring SysRamString() {
     MEMORYSTATUSEX ms; ms.dwLength = sizeof(ms);

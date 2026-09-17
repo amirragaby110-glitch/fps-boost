@@ -28,6 +28,7 @@
 #define RES_ICON_APP      101
 #define RES_PNG_LOGO      201
 #define RES_PNG_BANNER    202
+#define RES_PNG_BG        203
 #define RES_DB_GAMES      301
 
 // Custom window messages
@@ -41,7 +42,7 @@
 #define WM_APP_AUTO       (WM_APP + 17)
 
 // Pages
-enum PageId { PAGE_DASH = 0, PAGE_GAMES, PAGE_BOOST, PAGE_TWEAKS, PAGE_SYSTEM, PAGE_HELP, PAGE_SETTINGS, PAGE_POWER, PAGE_NET, PAGE_COUNT };
+enum PageId { PAGE_DASH = 0, PAGE_AI, PAGE_GAMES, PAGE_PROC, PAGE_BOOST, PAGE_TWEAKS, PAGE_SYSTEM, PAGE_POWER, PAGE_NET, PAGE_HELP, PAGE_SETTINGS, PAGE_COUNT };
 
 // Tweak categories
 enum TweakCat { TCAT_GAMING = 0, TCAT_PERF, TCAT_VISUAL, TCAT_NET, TCAT_PRIV, TCAT_ADV, TCAT_ACT };
@@ -87,6 +88,10 @@ enum CtrlId {
     IDC_N_IP, IDC_N_GRADE, IDC_N_CF, IDC_N_GOOG, IDC_N_AUTO, IDC_N_DNSST, IDC_N_STATUS,
     IDC_N_DNSLIST = 1113, IDC_N_DNSAPPLY, IDC_N_PINGALL, IDC_N_FASTEST,
     IDC_N_PINGRES, IDC_N_C1, IDC_N_C2, IDC_N_CSET,
+    // ai advisor page
+    IDC_A_INPUT = 1200, IDC_A_ASK, IDC_A_OUT, IDC_A_Q1, IDC_A_Q2, IDC_A_Q3, IDC_A_STATUS,
+    // live processes page
+    IDC_R_LIST = 1300, IDC_R_BOOST, IDC_R_RAM, IDC_R_RESTORE, IDC_R_REFRESH, IDC_R_STATUS,
     // tray menu
     IDM_TRAY_OPEN = 2000, IDM_TRAY_BOOST, IDM_TRAY_EXIT,
 };
@@ -213,6 +218,8 @@ std::wstring SysOsString();
 std::wstring SysUptimeString();
 std::wstring SysDisplayString();
 int  SysCpuCount();
+int  SysCpuMHz();      // ~MHz of CPU0, 0 if unknown
+int  SysGpuVramMB();   // dedicated VRAM of best GPU, 0 if unknown
 class CpuMeter {
     ULARGE_INTEGER prevIdle, prevKernel, prevUser;
     bool first;
@@ -286,6 +293,16 @@ std::vector<GameProfile>& Games_All();
 bool Games_Add(const std::wstring& exePath, const std::wstring& niceName = L"");
 bool Games_Remove(int idx);
 struct GameCandidate { std::wstring name; std::wstring exe; std::wstring dir; };
+struct GameSpec {
+    std::wstring match;  // lower-case exe key, e.g. L"gta5.exe"
+    std::wstring title;  // display name
+    std::wstring tip;    // localized tip (may be empty)
+    int minCpu, minGpu, minRam;
+    int recCpu, recGpu, recRam;
+    bool hasSpecs;       // false = generic estimate, not curated data
+    GameSpec() : minCpu(2), minGpu(2), minRam(8), recCpu(3), recGpu(4), recRam(16), hasSpecs(false) {}
+};
+void Games_Specs(std::vector<GameSpec>& out);
 void Games_Scan(std::vector<GameCandidate>& out);
 bool Games_ApplyPersistent(const GameProfile& g);
 std::wstring Games_TipFor(const std::wstring& exePath); // from embedded DB
@@ -339,6 +356,23 @@ bool MaxFpsIsActive();
 void AutoBoostStart(HWND notifyWnd);
 void AutoBoostStop();
 bool AutoBoostWatching();
+
+// ---------- ai.cpp ----------
+std::wstring Ai_Answer(const std::wstring& q); // offline advisor, EN/FA by UI lang
+
+// ---------- procboost.cpp ----------
+struct ProcInfo {
+    DWORD pid;
+    std::wstring name;
+    unsigned long long memMB;
+    bool isGame;
+    bool isSelf;
+    ProcInfo() : pid(0), memMB(0), isGame(false), isSelf(false) {}
+};
+void Proc_Enum(std::vector<ProcInfo>& out);
+bool Proc_Boost(DWORD pid, std::wstring& msg);
+bool Proc_RamFocus(DWORD pid, std::wstring& msg);
+bool Proc_Restore(DWORD pid);
 
 // ---------- ui.cpp ----------
 bool UI_Create(HINSTANCE hInst);

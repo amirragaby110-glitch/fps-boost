@@ -304,6 +304,7 @@ def main():
     ap.add_argument('--manifest', required=True)
     ap.add_argument('--logo', required=True)
     ap.add_argument('--banner', required=True)
+    ap.add_argument('--bg', default=None)
     ap.add_argument('--db', required=True)
     ap.add_argument('--ver', default='1.0.0')
     a = ap.parse_args()
@@ -314,6 +315,7 @@ def main():
     manifest = open(a.manifest, 'rb').read()
     logo = open(a.logo, 'rb').read()
     banner = open(a.banner, 'rb').read()
+    bgimg = open(a.bg, 'rb').read() if a.bg else None
     db = open(a.db, 'rb').read()
     ver = version_info(a.ver)
 
@@ -325,6 +327,8 @@ def main():
     items.append((RT_VERSION, 1, LANG, ver))
     items.append(('PNG', 201, LANG, logo))
     items.append(('PNG', 202, LANG, banner))
+    if bgimg is not None:
+        items.append(('PNG', 203, LANG, bgimg))
     items.append((RT_RCDATA, 301, LANG, db))
 
     info = inject(a.raw, a.out, items)

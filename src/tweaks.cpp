@@ -641,6 +641,79 @@ static bool RvMsiGpu() {
     return any && ok;
 }
 
+// --- 28. Global disable fullscreen optimizations ---
+static int CkFsoGlobal() {
+    DWORD a = 0, b = 0;
+    if (!RegGetDword(HKEY_CURRENT_USER, L"System\\GameConfigStore", L"GameDVR_FSEBehaviorMode", a)) return 0;
+    if (!RegGetDword(HKEY_CURRENT_USER, L"System\\GameConfigStore", L"GameDVR_HonorUserFSEBehaviorMode", b)) return 0;
+    return (a == 2 && b == 1) ? 1 : 0;
+}
+static bool ApFsoGlobal() {
+    return BSetD(HKEY_CURRENT_USER, L"System\\GameConfigStore", L"GameDVR_FSEBehaviorMode", 2) &&
+           BSetD(HKEY_CURRENT_USER, L"System\\GameConfigStore", L"GameDVR_HonorUserFSEBehaviorMode", 1);
+}
+static bool RvFsoGlobal() {
+    const wchar_t* s[] = {L"System\\GameConfigStore", L"System\\GameConfigStore"};
+    const wchar_t* n[] = {L"GameDVR_FSEBehaviorMode", L"GameDVR_HonorUserFSEBehaviorMode"};
+    return RevertKeys(HKEY_CURRENT_USER, s, n, 2);
+}
+// --- 29. Maximum timer resolution ---
+static int CkTimerRes() {
+    ULONG cur = 0, mn = 0, mx = 0;
+    if (!TimerQuery(cur, mn, mx) || mn == 0) return -1;
+    return cur <= mn ? 1 : 0;
+}
+static bool ApTimerRes() {
+    ULONG prev = 0;
+    if (!TimerSetMin(&prev)) return false;
+    RegSetDword(HKEY_CURRENT_USER, L"Software\\FPSBoosterPro", L"TimerPrev", prev);
+    return true;
+}
+static bool RvTimerRes() {
+    DWORD prev = 0;
+    if (!RegGetDword(HKEY_CURRENT_USER, L"Software\\FPSBoosterPro", L"TimerPrev", prev)) return true;
+    TimerRestore((ULONG)prev);
+    return true;
+}
+// --- 30. CPU security mitigations off (advanced) ---
+static int CkMitig() {
+    DWORD a = 0, b = 0;
+    const wchar_t* sub = L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management";
+    if (!RegGetDword(HKEY_LOCAL_MACHINE, sub, L"FeatureSettingsOverride", a)) return 0;
+    if (!RegGetDword(HKEY_LOCAL_MACHINE, sub, L"FeatureSettingsOverrideMask", b)) return 0;
+    return (a == 3 && b == 3) ? 1 : 0;
+}
+static bool ApMitig() {
+    const wchar_t* sub = L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management";
+    return BSetD(HKEY_LOCAL_MACHINE, sub, L"FeatureSettingsOverride", 3) &&
+           BSetD(HKEY_LOCAL_MACHINE, sub, L"FeatureSettingsOverrideMask", 3);
+}
+static bool RvMitig() {
+    const wchar_t* s[] = {L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+                           L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management"};
+    const wchar_t* n[] = {L"FeatureSettingsOverride", L"FeatureSettingsOverrideMask"};
+    return RevertKeys(HKEY_LOCAL_MACHINE, s, n, 2);
+}
+// --- 31. Xbox services off ---
+static const wchar_t* kXboxSvc[] = {L"XblAuthManager", L"XblGameSave", L"XboxGipSvc", L"XboxNetApiSvc"};
+static int CkXboxSvc() {
+    for (int i = 0; i < 4; i++) {
+        DWORD st = 0;
+        if (!ServiceGetStart(kXboxSvc[i], st) || st != 4) return 0;
+    }
+    return 1;
+}
+static bool ApXboxSvc() {
+    bool ok = true;
+    for (int i = 0; i < 4; i++) ok = ApSvcManual(kXboxSvc[i], 4) && ok;
+    return ok;
+}
+static bool RvXboxSvc() {
+    bool ok = true;
+    for (int i = 0; i < 4; i++) ok = RvSvc(kXboxSvc[i]) && ok;
+    return ok;
+}
+
 // ================= Table =================
 static const Tweak kTweaks[] = {
 {"gamemode",
@@ -778,6 +851,26 @@ static const Tweak kTweaks[] = {
  "Stops Windows from logging and uploading your activity.",
  "ثبت و آپلود فعالیت شما توسط ویندوز متوقف می‌شود.",
  TCAT_PRIV, true, false, false, CkActHist, ApActHist, RvActHist},
+{"fsoglobal",
+ "Disable fullscreen optimizations (global)", "خاموش کردن بهینه‌سازی تمام‌صفحه (سراسری)",
+ "Forces real exclusive fullscreen in all games for lower input lag.",
+ "بازی‌ها را مجبور به تمام‌صفحه واقعی می‌کند تا تأخیر ورودی کمتر شود.",
+ TCAT_GAMING, true, false, false, CkFsoGlobal, ApFsoGlobal, RvFsoGlobal},
+{"timerres",
+ "Maximum timer resolution (0.5ms)", "حداکثر دقت تایمر سیستم",
+ "Requests the finest system timer for smoother frames. Active while the app runs.",
+ "دقیق‌ترین تایمر سیستم را درخواست می‌کند. تا وقتی برنامه باز است فعال است.",
+ TCAT_PERF, true, false, false, CkTimerRes, ApTimerRes, RvTimerRes},
+{"mitigations",
+ "Disable CPU security mitigations", "خاموش کردن محافظت‌های امنیتی پردازنده",
+ "Advanced: can add 5-15% FPS on older CPUs but lowers Spectre/Meltdown protection. Needs restart.",
+ "پیشرفته: در پردازنده‌های قدیمی ۵ تا ۱۵ درصد فریم اضافه می‌کند ولی امنیت را کم می‌کند. نیاز به ری‌استارت.",
+ TCAT_ADV, false, true, false, CkMitig, ApMitig, RvMitig},
+{"xboxsvc",
+ "Disable Xbox background services", "خاموش کردن سرویس‌های پس‌زمینه ایکس‌باکس",
+ "Disables 4 useless Xbox services that waste RAM and CPU.",
+ "۴ سرویس بلااستفاده ایکس‌باکس که رم و پردازنده هدر می‌دهند خاموش می‌شود.",
+ TCAT_PERF, true, true, false, CkXboxSvc, ApXboxSvc, RvXboxSvc},
 };
 
 const std::vector<Tweak>& Tweaks_All() {

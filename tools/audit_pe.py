@@ -244,7 +244,7 @@ def main():
     check('version %s valid' % ver, vok)
 
     # ---- PNG + DB ----
-    for rid, nm in ((201, 'logo'), (202, 'banner')):
+    for rid, nm in ((201, 'logo'), (202, 'banner'), (203, 'bg')):
         b = blob('PNG', rid)
         check('png %s (%d)' % (nm, rid), b is not None and b[:8] == b'\x89PNG\r\n\x1a\n')
     db = blob(10, 301)

@@ -7,9 +7,9 @@
 using namespace Gdiplus;
 
 // ---------- Theme ----------
-#define COL_BG        RGB(13,18,32)
-#define COL_PANEL     RGB(20,27,45)
-#define COL_SIDE      RGB(9,13,25)
+#define COL_BG        RGB(8,12,24)
+#define COL_PANEL     RGB(15,21,38)
+#define COL_SIDE      RGB(6,9,20)
 #define COL_CARD      RGB(26,34,56)
 #define COL_ACCENT    RGB(34,211,238)
 #define COL_ACCENT2   RGB(232,121,249)
@@ -27,6 +27,7 @@ static int S(int v) { return (v * g_scale + 48) / 96; }
 static HBRUSH hBrBg = NULL, hBrPanel = NULL, hBrSide = NULL, hBrCard = NULL, hBrEdit = NULL;
 static Bitmap* g_imgLogo = NULL;
 static Bitmap* g_imgBanner = NULL;
+static Bitmap* g_imgBg = NULL;
 
 // Colored labels registry
 struct ColorLabel { HWND h; COLORREF c; };
@@ -157,7 +158,16 @@ static LRESULT CALLBACK PageProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     case WM_ERASEBKGND: {
         HDC dc = (HDC)w;
         RECT r; GetClientRect(h, &r);
-        FillRect(dc, &r, hBrPanel);
+        if (g_imgBg) {
+            Graphics g(dc);
+            g.SetInterpolationMode(InterpolationModeBilinear);
+            int wpx = r.right - r.left, hpx = r.bottom - r.top;
+            if (wpx > 0 && hpx > 0) {
+                g.DrawImage(g_imgBg, r.left, r.top, wpx, hpx);
+                SolidBrush dim(Color(88, 6, 9, 20));
+                g.FillRectangle(&dim, r.left, r.top, wpx, hpx);
+            } else FillRect(dc, &r, hBrPanel);
+        } else FillRect(dc, &r, hBrPanel);
         return 1;
     }
     case WM_CTLCOLORSTATIC:
@@ -174,7 +184,9 @@ static LRESULT CALLBACK PageProc(HWND h, UINT m, WPARAM w, LPARAM l) {
 static const wchar_t* NavText(int page) {
     switch (page) {
     case PAGE_DASH: return T(SID_NAV_DASH);
+    case PAGE_AI: return T(SID_NAV_AI);
     case PAGE_GAMES: return T(SID_NAV_GAMES);
+    case PAGE_PROC: return T(SID_NAV_PROC);
     case PAGE_BOOST: return T(SID_NAV_BOOST);
     case PAGE_TWEAKS: return T(SID_NAV_TWEAKS);
     case PAGE_SYSTEM: return T(SID_NAV_SYSTEM);
@@ -192,29 +204,31 @@ static LRESULT CALLBACK SideProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(h, &ps);
         RECT r; GetClientRect(h, &r);
-        HBRUSH bg = CreateSolidBrush(COL_SIDE);
-        FillRect(dc, &r, bg);
-        DeleteObject(bg);
         Graphics g(dc);
+        int gh = r.bottom > 1 ? r.bottom : 1;
+        LinearGradientBrush bg(Point(0, 0), Point(0, gh), Color(6, 9, 20), Color(11, 17, 36));
+        g.FillRectangle(&bg, r.left, r.top, r.right - r.left, gh);
+        SolidBrush glow(Color(70, 34, 211, 238));
+        g.FillRectangle(&glow, 0, 0, r.right, S(3));
         g.SetInterpolationMode(InterpolationModeHighQualityBicubic);
         if (g_imgLogo) {
-            int sz = S(168);
+            int sz = S(148);
             int x = (r.right - sz) / 2;
-            g.DrawImage(g_imgLogo, x, S(16), sz, sz);
+            g.DrawImage(g_imgLogo, x, S(12), sz, sz);
         }
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, COL_TEXT);
         HFONT old = (HFONT)SelectObject(dc, g_hFontBig);
-        RECT tr = {0, S(192), r.right, S(220)};
+        RECT tr = {0, S(166), r.right, S(192)};
         DrawTextW(dc, T(SID_APP_NAME), -1, &tr, DT_CENTER | DT_SINGLELINE);
         SelectObject(dc, g_hFont);
         SetTextColor(dc, COL_MUTED);
-        RECT tr2 = {0, S(216), r.right, S(238)};
+        RECT tr2 = {0, S(190), r.right, S(210)};
         DrawTextW(dc, T(SID_APP_TAG), -1, &tr2, DT_CENTER | DT_SINGLELINE);
         // divider
-        HPEN pen = CreatePen(PS_SOLID, 1, RGB(40, 50, 80));
+        HPEN pen = CreatePen(PS_SOLID, 1, RGB(40, 60, 96));
         HPEN op = (HPEN)SelectObject(dc, pen);
-        MoveToEx(dc, S(20), S(250), NULL); LineTo(dc, r.right - S(20), S(250));
+        MoveToEx(dc, S(20), S(222), NULL); LineTo(dc, r.right - S(20), S(222));
         SelectObject(dc, op); DeleteObject(pen);
         // version at bottom
         SetTextColor(dc, RGB(90, 100, 130));
@@ -267,6 +281,8 @@ static HWND hBoostLog, hBoostProg, hBoostStart, hBoostUndo, hBoostMax;
 static HWND hTweakList, hTweakDetail, hTweakApply, hTweakRevert, hTweakAll, hTweakUndoAll;
 static HWND hSysCpu, hSysRam, hSysUp, hSysTimer, hSysGraph;
 static HWND hHelpText;
+static HWND hAiInput, hAiAsk, hAiQ1, hAiQ2, hAiQ3, hAiHint, hAiOut, hAiStatus;
+static HWND hProcList, hProcHint, hProcStatus;
 static HWND hSetLang, hSetTray, hSetStartup;
 static HWND hSetStList = NULL;
 static int g_cpuHist[90], g_ramHist[90], g_histN = 0;
@@ -814,6 +830,75 @@ static void BuildNet(HWND p) {
     SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_TEXT);
 }
 
+// ---------- AI advisor ----------
+static void AiAsk() {
+    wchar_t q[1024];
+    GetWindowTextW(hAiInput, q, 1024);
+    size_t a = 0, b = wcslen(q);
+    while (a < b && iswspace(q[a])) a++;
+    while (b > a && iswspace(q[b - 1])) b--;
+    if (a >= b) { SetLabel(hAiStatus, T(SID_A_HINT), COL_YELLOW); return; }
+    q[b] = 0;
+    std::wstring ans = Ai_Answer(q + a);
+    int len = GetWindowTextLengthW(hAiOut);
+    SendMessageW(hAiOut, EM_SETSEL, (WPARAM)len, (LPARAM)len);
+    std::wstring block = WFormat(L"%s: %s\r\n%s\r\n\r\n", T(SID_A_YOU), q + a, ans.c_str());
+    SendMessageW(hAiOut, EM_REPLACESEL, 0, (LPARAM)block.c_str());
+    SendMessageW(hAiOut, EM_SETSEL, (WPARAM)-1, (LPARAM)-1);
+    SendMessageW(hAiOut, EM_SCROLLCARET, 0, 0);
+    SetWindowTextW(hAiInput, L"");
+    SetLabel(hAiStatus, T(SID_STATUS_READY), COL_MUTED);
+}
+static void BuildAI(HWND p) {
+    hAiInput = MkEdit(p, IDC_A_INPUT, 0, 0, 700, 32);
+    hAiAsk = MkCTA(p, IDC_A_ASK, 710, 0, 160, 32, SID_A_ASK);
+    hAiQ1 = MkButton(p, IDC_A_Q1, 0, 40, 280, 30, SID_A_Q1);
+    hAiQ2 = MkButton(p, IDC_A_Q2, 290, 40, 280, 30, SID_A_Q2);
+    hAiQ3 = MkButton(p, IDC_A_Q3, 580, 40, 280, 30, SID_A_Q3);
+    hAiHint = MkLabel(p, 0, 76, 860, 22);
+    SetLabel(hAiHint, T(SID_A_HINT), COL_MUTED);
+    hAiOut = MkEdit(p, IDC_A_OUT, 0, 100, 860, 440, true, true);
+    hAiStatus = MkLabel(p, 0, 548, 860, 24);
+    SetLabel(hAiStatus, T(SID_STATUS_READY), COL_MUTED);
+    SetWindowTextW(hAiOut, Ai_Answer(L"").c_str());
+}
+
+// ---------- Live processes ----------
+static DWORD ProcSelectedPid() {
+    int sel = ListView_GetNextItem(hProcList, -1, LVNI_SELECTED);
+    if (sel < 0) return 0;
+    return (DWORD)LVGetData(hProcList, sel);
+}
+static void ProcFillList() {
+    if (!hProcList) return;
+    ListView_DeleteAllItems(hProcList);
+    std::vector<ProcInfo> v;
+    Proc_Enum(v);
+    for (size_t i = 0; i < v.size(); i++) {
+        std::wstring nm = v[i].name;
+        if (v[i].isSelf) nm += WFormat(L" %s", T(SID_R_SELF));
+        int row = LVAddRow(hProcList, (int)i, nm.c_str());
+        LVSet(hProcList, row, 1, WFormat(L"%u", v[i].pid));
+        LVSet(hProcList, row, 2, WFormat(L"%lu", (unsigned long)v[i].memMB));
+        LVSet(hProcList, row, 3, v[i].isGame ? L"\U0001F3AE" : L"");
+        LVSetData(hProcList, row, (LPARAM)v[i].pid);
+    }
+}
+static void BuildProc(HWND p) {
+    hProcList = MkList(p, IDC_R_LIST, 0, 0, 860, 440);
+    int ids[] = {SID_R_COL_PROC, SID_R_COL_PID, SID_R_COL_RAM, SID_R_COL_GAME};
+    int ww[] = {380, 90, 130, 120};
+    LVCols(hProcList, ids, ww, 4);
+    hProcHint = MkLabel(p, 0, 448, 860, 22);
+    SetLabel(hProcHint, T(SID_R_HINT), COL_MUTED);
+    MkButton(p, IDC_R_BOOST, 0, 476, 200, 34, SID_R_BOOST);
+    MkButton(p, IDC_R_RAM, 210, 476, 200, 34, SID_R_RAMFOCUS);
+    MkButton(p, IDC_R_RESTORE, 420, 476, 200, 34, SID_R_RESTORE);
+    MkButton(p, IDC_R_REFRESH, 630, 476, 170, 34, SID_BTN_REFRESH);
+    hProcStatus = MkLabel(p, 0, 518, 860, 24);
+    SetLabel(hProcStatus, T(SID_STATUS_READY), COL_MUTED);
+}
+
 // ---------- Page management ----------
 static const int kPageOfNav[PAGE_COUNT] = {0, 1, 2, 3, 4, 5, 6};
 void UI_ShowPage(int page) {
@@ -821,9 +906,9 @@ void UI_ShowPage(int page) {
     g_page = page;
     for (int i = 0; i < PAGE_COUNT; i++)
         ShowWindow(g_hPages[i], i == page ? SW_SHOW : SW_HIDE);
-    static StrId titles[] = {SID_NAV_DASH, SID_NAV_GAMES, SID_NAV_BOOST, SID_NAV_TWEAKS,
-                             SID_NAV_SYSTEM, SID_NAV_HELP, SID_NAV_SETTINGS, SID_NAV_POWER, SID_NAV_NET};
-    static StrId subs[] = {SID_DASH_SUB, SID_G_SUB, SID_B_SUB, SID_T_SUB, SID_S_SUB, SID_H_SUB, SID_SET_SUB, SID_P_SUB, SID_N_SUB};
+    static StrId titles[] = {SID_NAV_DASH, SID_NAV_AI, SID_NAV_GAMES, SID_NAV_PROC, SID_NAV_BOOST,
+                             SID_NAV_TWEAKS, SID_NAV_SYSTEM, SID_NAV_POWER, SID_NAV_NET, SID_NAV_HELP, SID_NAV_SETTINGS};
+    static StrId subs[] = {SID_DASH_SUB, SID_A_SUB, SID_G_SUB, SID_R_SUB, SID_B_SUB, SID_T_SUB, SID_S_SUB, SID_P_SUB, SID_N_SUB, SID_H_SUB, SID_SET_SUB};
     SetWindowTextW(hTitle, WFormat(L"%s   -   %s", T(titles[page]), T(subs[page])).c_str());
     InvalidateRect(hSide, NULL, TRUE);
     for (int i = 0; i < PAGE_COUNT; i++) {
@@ -833,6 +918,7 @@ void UI_ShowPage(int page) {
     switch (page) {
     case PAGE_DASH: DashRefresh(); break;
     case PAGE_GAMES: GamesFillList(); break;
+    case PAGE_PROC: ProcFillList(); break;
     case PAGE_TWEAKS: TweaksFillList(); TweaksShowDetail(-1); break;
     case PAGE_SYSTEM: SysRefresh(); break;
     case PAGE_POWER: PowRefresh(); break;
@@ -930,11 +1016,30 @@ static void DrawNav(const DRAWITEMSTRUCT* d) {
     RECT r = d->rcItem;
     int id = (int)d->CtlID - IDC_NAV_BASE;
     bool sel = (id == g_page);
-    HBRUSH bg = CreateSolidBrush(sel ? COL_SELBAR : COL_SIDE);
+    // blend with the sidebar gradient (parent has WS_CLIPCHILDREN, so paint our own bg)
+    RECT pr; GetClientRect(GetParent(d->hwndItem), &pr);
+    POINT pt = {0, 0};
+    MapWindowPoints(d->hwndItem, GetParent(d->hwndItem), &pt, 1);
+    int ph = pr.bottom > 1 ? pr.bottom : 1;
+    int tt = (pt.y * 255) / ph;
+    HBRUSH bg = CreateSolidBrush(RGB(6 + 5 * tt / 255, 9 + 8 * tt / 255, 20 + 16 * tt / 255));
     FillRect(dc, &r, bg);
     DeleteObject(bg);
     if (sel) {
-        RECT bar = {r.left, r.top, r.left + S(4), r.bottom};
+        Graphics g(dc);
+        g.SetSmoothingMode(SmoothingModeAntiAlias);
+        SolidBrush pill(Color(56, 34, 211, 238));
+        int L = r.left + S(2), T = r.top + S(3), R = r.right - S(2), B = r.bottom - S(3);
+        int rad = (B - T) / 2 - S(2);
+        if (rad < S(4)) rad = S(4);
+        GraphicsPath path;
+        path.AddArc(L, T, rad * 2, rad * 2, 180, 90);
+        path.AddArc(R - rad * 2, T, rad * 2, rad * 2, 270, 90);
+        path.AddArc(R - rad * 2, B - rad * 2, rad * 2, rad * 2, 0, 90);
+        path.AddArc(L, B - rad * 2, rad * 2, rad * 2, 90, 90);
+        path.CloseFigure();
+        g.FillPath(&pill, &path);
+        RECT bar = {r.left + S(8), r.top + S(8), r.left + S(12), r.bottom - S(8)};
         HBRUSH ab = CreateSolidBrush(COL_ACCENT);
         FillRect(dc, &bar, ab);
         DeleteObject(ab);
@@ -1171,6 +1276,35 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         case IDC_G_LAUNCH:
             if (g_gameSel >= 0 && !g_boosting) Games_BoostLaunch(g_gameSel, g_hMain);
             break;
+        case IDC_A_ASK: AiAsk(); break;
+        case IDC_A_Q1: SetWindowTextW(hAiInput, T(SID_A_Q1)); AiAsk(); break;
+        case IDC_A_Q2: SetWindowTextW(hAiInput, T(SID_A_Q2)); AiAsk(); break;
+        case IDC_A_Q3: SetWindowTextW(hAiInput, T(SID_A_Q3)); AiAsk(); break;
+        case IDC_R_REFRESH: ProcFillList(); break;
+        case IDC_R_BOOST: {
+            DWORD pid = ProcSelectedPid();
+            if (!pid) { SetLabel(hProcStatus, T(SID_R_HINT), COL_YELLOW); break; }
+            std::wstring m; bool ok = Proc_Boost(pid, m);
+            SetLabel(hProcStatus, m, ok ? COL_GREEN : COL_RED);
+            ProcFillList();
+            break;
+        }
+        case IDC_R_RAM: {
+            DWORD pid = ProcSelectedPid();
+            if (!pid) { SetLabel(hProcStatus, T(SID_R_HINT), COL_YELLOW); break; }
+            std::wstring m; bool ok = Proc_RamFocus(pid, m);
+            SetLabel(hProcStatus, m, ok ? COL_GREEN : COL_RED);
+            ProcFillList();
+            break;
+        }
+        case IDC_R_RESTORE: {
+            DWORD pid = ProcSelectedPid();
+            if (!pid) { SetLabel(hProcStatus, T(SID_R_HINT), COL_YELLOW); break; }
+            bool ok = Proc_Restore(pid);
+            SetLabel(hProcStatus, WFormat(L"%u - %s", pid, T(SID_BTN_REVERT)), ok ? COL_GREEN : COL_RED);
+            ProcFillList();
+            break;
+        }
         case IDC_B_START:
             if (!g_boosting && !g_inGame) {
                 g_boosting = true;
@@ -1620,6 +1754,22 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         MoveWindow(hDashPic, 0, 0, pw, S(150), TRUE);
         MoveWindow(hDashTip, 0, S(448), pw, ph - S(448) - S(8), TRUE);
         MoveWindow(hGamesList, 0, 0, pw, S(236), TRUE);
+        MoveWindow(hAiInput, 0, 0, pw - S(170), S(32), TRUE);
+        MoveWindow(hAiAsk, pw - S(160), 0, S(160), S(32), TRUE);
+        { int qw = (pw - S(20)) / 3;
+        MoveWindow(hAiQ1, 0, S(40), qw, S(30), TRUE);
+        MoveWindow(hAiQ2, qw + S(10), S(40), qw, S(30), TRUE);
+        MoveWindow(hAiQ3, qw * 2 + S(20), S(40), pw - qw * 2 - S(20), S(30), TRUE); }
+        MoveWindow(hAiHint, 0, S(76), pw, S(22), TRUE);
+        MoveWindow(hAiOut, 0, S(100), pw, ph - S(100) - S(32), TRUE);
+        MoveWindow(hAiStatus, 0, ph - S(26), pw, S(24), TRUE);
+        MoveWindow(hProcList, 0, 0, pw, ph - S(150), TRUE);
+        MoveWindow(hProcHint, 0, ph - S(142), pw, S(22), TRUE);
+        MoveWindow(GetDlgItem(g_hPages[PAGE_PROC], IDC_R_BOOST), 0, ph - S(112), S(200), S(34), TRUE);
+        MoveWindow(GetDlgItem(g_hPages[PAGE_PROC], IDC_R_RAM), S(210), ph - S(112), S(200), S(34), TRUE);
+        MoveWindow(GetDlgItem(g_hPages[PAGE_PROC], IDC_R_RESTORE), S(420), ph - S(112), S(200), S(34), TRUE);
+        MoveWindow(GetDlgItem(g_hPages[PAGE_PROC], IDC_R_REFRESH), S(630), ph - S(112), S(170), S(34), TRUE);
+        MoveWindow(hProcStatus, 0, ph - S(70), pw, S(24), TRUE);
         MoveWindow(hBoostProg, 0, S(114), pw, S(26), TRUE);
         MoveWindow(hBoostLog, 0, S(152), pw, ph - S(152) - S(8), TRUE);
         MoveWindow(hTweakList, 0, 0, pw, ph - S(230), TRUE);
@@ -1683,6 +1833,7 @@ bool UI_Create(HINSTANCE hInst) {
 
     g_imgLogo = LoadPng(RES_PNG_LOGO);
     g_imgBanner = LoadPng(RES_PNG_BANNER);
+    g_imgBg = LoadPng(RES_PNG_BG);
 
     WNDCLASSW wc;
     ZeroMemory(&wc, sizeof(wc));
@@ -1710,7 +1861,7 @@ bool UI_Create(HINSTANCE hInst) {
     wc.lpszClassName = L"FPSBoosterSide";
     if (!RegisterClassW(&wc)) return false;
 
-    int W = S(1180), H = S(760);
+    int W = S(1180), H = S(800);
     g_hMain = CreateWindowExW(0, L"FPSBoosterMain", T(SID_APP_NAME),
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT, W, H,
         NULL, NULL, hInst, NULL);
@@ -1736,7 +1887,9 @@ bool UI_Create(HINSTANCE hInst) {
             S(264), S(62), S(892), S(624), g_hMain, NULL, hInst, NULL);
     }
     BuildDash(g_hPages[PAGE_DASH]);
+    BuildAI(g_hPages[PAGE_AI]);
     BuildGames(g_hPages[PAGE_GAMES]);
+    BuildProc(g_hPages[PAGE_PROC]);
     BuildBoost(g_hPages[PAGE_BOOST]);
     BuildTweaks(g_hPages[PAGE_TWEAKS]);
     BuildSystem(g_hPages[PAGE_SYSTEM]);

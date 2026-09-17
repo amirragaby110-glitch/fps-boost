@@ -318,6 +318,46 @@ std::wstring Games_TipFor(const std::wstring& exePath) {
     return L"";
 }
 
+// ================= Requirements specs (AI advisor) =================
+static std::wstring PrettifyTitle(const std::string& match) {
+    std::string b = match;
+    size_t dot = b.find('.');
+    if (dot != std::string::npos) b = b.substr(0, dot);
+    for (size_t i = 0; i < b.size(); i++)
+        if (b[i] == '_' || b[i] == '-') b[i] = ' ';
+    bool cap = true;
+    for (size_t i = 0; i < b.size(); i++) {
+        if (cap && b[i] >= 'a' && b[i] <= 'z') { b[i] -= 32; cap = false; }
+        else if (b[i] == ' ') cap = true;
+    }
+    return Utf8ToWide(b);
+}
+void Games_Specs(std::vector<GameSpec>& out) {
+    DbLoad();
+    out.clear();
+    if (g_db.type != JVal::OBJ) return;
+    const JVal* a = g_db.find("db");
+    if (!a || a->type != JVal::ARR) return;
+    bool fa = Strings_GetLang() == 1;
+    for (size_t i = 0; i < a->arr.size(); i++) {
+        const JVal& e = a->arr[i];
+        GameSpec s;
+        s.match = ToLower(Utf8ToWide(e.str("match")));
+        if (s.match.empty()) continue;
+        s.title = Utf8ToWide(e.str("title"));
+        if (s.title.empty()) s.title = PrettifyTitle(e.str("match"));
+        s.tip = Utf8ToWide(fa ? e.str("fa") : e.str("en"));
+        const JVal* mn = e.find("min");
+        const JVal* rc = e.find("rec");
+        if (mn && rc) {
+            s.minCpu = mn->num("cpu", 2); s.minGpu = mn->num("gpu", 2); s.minRam = mn->num("ram", 8);
+            s.recCpu = rc->num("cpu", 3); s.recGpu = rc->num("gpu", 4); s.recRam = rc->num("ram", 16);
+            s.hasSpecs = true;
+        }
+        out.push_back(s);
+    }
+}
+
 // ================= Boost & Launch =================
 static bool g_launchBusy = false;
 static ULONG g_sessTimerPrev = 0; static bool g_sessTimer = false;

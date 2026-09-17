@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build app assets: icon.ico + UI pngs from raw artwork."""
 import os
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageEnhance
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 A = os.path.join(ROOT, 'assets')
@@ -59,6 +59,21 @@ def main():
     bp = os.path.join(A, 'banner_ui.png')
     banner.save(bp, optimize=True)
     print('banner_ui.png: %.1f KB' % (os.path.getsize(bp) / 1024))
+
+    # ---- page background 1600x900, darkened for text contrast ----
+    bg = Image.open(os.path.join(A, 'bg_raw.png')).convert('RGB')
+    print('bg:', bg.size)
+    target_w, target_h = 1600, 900
+    scale = max(target_w / bg.width, target_h / bg.height)
+    nw, nh = int(bg.width * scale + 0.5), int(bg.height * scale + 0.5)
+    bg = bg.resize((nw, nh), Image.LANCZOS)
+    x = (nw - target_w) // 2
+    y = (nh - target_h) // 2
+    bg = bg.crop((x, y, x + target_w, y + target_h))
+    bg = ImageEnhance.Brightness(bg).enhance(0.8)
+    gp = os.path.join(A, 'bg_ui.png')
+    bg.save(gp, optimize=True)
+    print('bg_ui.png: %.1f KB' % (os.path.getsize(gp) / 1024))
 
 if __name__ == '__main__':
     main()

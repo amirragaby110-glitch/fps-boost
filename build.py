@@ -17,9 +17,10 @@ RELEASE = os.path.join(ROOT, 'release')
 TARGET_SIZE = 100 * 1024 * 1024  # exactly 100 MiB -> Explorer shows "100 MB"
 
 SOURCES = ['main.cpp', 'strings.cpp', 'util.cpp', 'sysinfo.cpp',
-           'tweaks.cpp', 'games.cpp', 'ui.cpp', 'power.cpp', 'net.cpp', 'watch.cpp', 'maxfps.cpp']
+           'tweaks.cpp', 'games.cpp', 'ui.cpp', 'power.cpp', 'net.cpp', 'watch.cpp', 'maxfps.cpp',
+           'ai.cpp', 'procboost.cpp']
 LIBS = ['comctl32', 'gdi32', 'gdiplus', 'shell32', 'ole32', 'uuid',
-        'powrprof', 'advapi32', 'comdlg32', 'winhttp', 'iphlpapi', 'dxgi', 'ws2_32']
+        'powrprof', 'advapi32', 'comdlg32', 'winhttp', 'iphlpapi', 'dxgi', 'ws2_32', 'psapi']
 
 
 def run(cmd, **kw):
@@ -121,7 +122,7 @@ def pad_to_100mb(src, dst):
     print('padded: %d -> %d bytes (%.1f MB)' % (len(data), final, final / 1024 / 1024))
 
 
-SETUP_VER = '1.5.0'
+SETUP_VER = '1.6.0'
 
 def gen_setup_license():
     text = open(os.path.join(ROOT, 'LICENSE'), encoding='utf-8').read().strip()
@@ -145,6 +146,7 @@ def build_setup(payload):
     run([sys.executable, 'tools/inject_resources.py', raw, stub,
          '--icon', 'assets/icon.ico', '--manifest', 'res/setup.manifest',
          '--logo', 'assets/logo_ui.png', '--banner', 'assets/banner_ui.png',
+         '--bg', 'assets/bg_ui.png',
          '--db', 'data/games_db.json', '--ver', SETUP_VER])
     # layout: [stub][payload][zeros][footer64] == exactly 100 MB
     stub_data = open(stub, 'rb').read()
@@ -195,7 +197,8 @@ def main():
     run([sys.executable, 'tools/inject_resources.py', raw, full,
          '--icon', 'assets/icon.ico', '--manifest', 'res/app.manifest',
          '--logo', 'assets/logo_ui.png', '--banner', 'assets/banner_ui.png',
-         '--db', 'data/games_db.json', '--ver', '1.5.0'])
+         '--bg', 'assets/bg_ui.png',
+         '--db', 'data/games_db.json', '--ver', '1.6.0'])
 
     print('=== [4/6] PE checks + pad to 100 MB ===')
     check_imports(full)
@@ -204,7 +207,7 @@ def main():
     pe_checksum_write(exe)
 
     print('=== [5/6] portable zip ===')
-    zpath = os.path.join(RELEASE, 'FPSBooster-v1.5-Portable.zip')
+    zpath = os.path.join(RELEASE, 'FPSBooster-v1.6-Portable.zip')
     with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         z.write(exe, 'fpsbooster.exe')
         z.write(os.path.join(ROOT, 'README.md'), 'README.md')

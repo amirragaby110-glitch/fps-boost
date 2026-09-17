@@ -21,11 +21,13 @@ set(APP_SOURCES
     src/net.cpp
     src/watch.cpp
     src/maxfps.cpp
+    src/ai.cpp
+    src/procboost.cpp
 )
 
 set(APP_LIBS
     comctl32 gdi32 gdiplus shell32 ole32 uuid
-    powrprof advapi32 comdlg32 winhttp iphlpapi dxgi ws2_32
+    powrprof advapi32 comdlg32 winhttp iphlpapi dxgi ws2_32 psapi
 )
 
 # Resource scripts need absolute asset paths

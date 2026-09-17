@@ -29,6 +29,7 @@ Everything is **backed up and reversible**, with an automatic **restore point** 
 - 🐛 **Bug fixes**: settings (language/Beast/auto-boost) now actually persist — fixed malformed settings.json; hardened startup-manager buffers
 - ⚡ **v1.5 reliability**: fixed resource-tree bug (icon/logo/manifest now load correctly), real PE checksums, new ⚡FPS logo + banner, strict `tools/audit_pe.py` loader-conformance validator
 - 🌐 **v1.7 online AI + MAXIMUM**: keyless online AI answers (auto offline/online routing), 5 new max tweaks (Nagle, responsiveness, VBS...), MAX mode boosts foreground game + trims RAM
+- 🧹 **v3.1 AI removed**: the AI Advisor page was removed — no free keyless AI backend works reliably (all need keys, accounts, or are sanctioned), so instead of a broken button the app now ships 10 pages where every feature genuinely works
 - 🌗 **v2.1 any-program performance**: RAM Lock (up to MAX, guaranteed) for any process, pin any running program to library, per-game resolution (auto-restore), .lnk shortcuts, process context menu + auto-refresh, smarter AI (PC-aware, remembers chat, 6 new offline topics)
 - **v2.0 official UI**: live Dark/Light/Auto theme + 4 accent colors, brand-new gradient-glow background, quick theme button, global Ctrl+Alt+B boost hotkey, one-click update checker, instant language switch (auto-restart)
 - 🎨 **v1.7.1 UI polish**: fully dark lists/progress bars/combos/checkboxes (no more white patches), neon Undo button, RTL text in Persian mode
@@ -159,6 +160,7 @@ MIT — see [LICENSE](LICENSE).
 - 🌐 **هوش آنلاین و ماکسیمم ۱٫۷**: جواب‌های آنلاین بدون کلید (مسیردهی خودکار آفلاین/آنلاین)، ۵ توییک ماکسیمم، حالت MAX بازی جلویی را بوست می‌کند
 - 🎨 **پولیش رابط ۱٫۷٫۱**: لیست‌ها، نوار پیشرفت، کامبوباکس‌ها و چک‌باکس‌ها کاملاً تیره (بدون لکه سفید)، دکمه Undo نئونی، متن راست‌به‌چپ در حالت فارسی
 - **رابط رسمی 2.0**: تم زنده تیره/روشن/خودکار + 4 رنگ اصلی، بک‌گراند گرادیانی جدید، دکمه سریع تم، هات‌کی سراسری Ctrl+Alt+B، بررسی آپدیت با یک کلیک، تعویض زبان فوری
+- 🧹 **حذف هوش مصنوعی 3.1**: صفحه مشاور هوشمند حذف شد — هیچ سرویس هوش مصنوعی رایگان و بدون کلیدی قابل اعتماد نیست (همه کلید، اکانت یا تحریم دارند)، پس به‌جای دکمه خراب، برنامه حالا ۱۰ صفحه دارد که همه واقعاً کار می‌کنند
 - **پرفورمنس هر برنامه 2.1**: قفل رم (تا حداکثر، تضمینی) برای هر پردازش، پین هر برنامه به کتابخانه، رزولوشن اختصاصی هر بازی، میانبرها، منوی راست‌کلیک + رفرش خودکار، هوش مصنوعی باهوش‌تر (آگاه از سیستم، حافظه گفتگو، 6 موضوع آفلاین)
 - 🤖 **هوش مصنوعی و پردازش‌های ۱٫۶**: مشاور هوشمند آفلاین (آیا اجرا می‌شود؟ فارسی/انگلیسی برای ۱۲۰+ بازی)، صفحه پردازش‌های زنده (بوست اولویت + تمرکز رم)، بک‌گراند نئونی جدید، ۴ توییک تازه اف‌پی‌اس
 - ⚡ **پایداری ۱٫۵**: باگ درخت resources درست شد (آیکون/لوگو/مانیفست حالا درست لود می‌شوند)، چک‌سام واقعی PE، لوگوی جدید ⚡FPS + بنر، ابزار اعتبارسنجی `tools/audit_pe.py`

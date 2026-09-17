@@ -208,7 +208,6 @@ static void ProgSet(HWND h, int pct) {
 }
 
 // ---------- Settings ----------
-static bool g_aiOnline = true;
 static std::wstring g_aiPending;
 std::wstring g_lastBoost;
 void Settings_Load() {
@@ -224,14 +223,13 @@ void Settings_Load() {
     g_beastGuid = root.wstr("beast");
     g_beastPrev = root.wstr("beastprev");
     g_autoBoost = root.num("autoboost", 0) != 0;
-    g_aiOnline = root.num("aionline", 1) != 0;
     g_themeMode = root.num("theme", 2);
     g_accent = root.num("accent", 0);
     g_hotkey = root.num("hotkey", 1) != 0;
 }
 void Settings_Save() {
     char nb[128];
-    snprintf(nb, 128, "{\"lang\":%d,\"tray\":%d,\"score\":%d,\"autoboost\":%d,\"aionline\":%d", Strings_GetLang(), g_closeToTray?1:0, g_lastScore, g_autoBoost?1:0, g_aiOnline?1:0);
+    snprintf(nb, 128, "{\"lang\":%d,\"tray\":%d,\"score\":%d,\"autoboost\":%d", Strings_GetLang(), g_closeToTray?1:0, g_lastScore, g_autoBoost?1:0);
     std::string j = nb;
     j += ",\"lastBoost\":\"" + JsonEscapeW(g_lastBoost) + "\"";
     j += ",\"beast\":\"" + JsonEscapeW(g_beastGuid) + "\",\"beastprev\":\"" + JsonEscapeW(g_beastPrev) + "\"";
@@ -447,7 +445,6 @@ static LRESULT CALLBACK PageProc(HWND h, UINT m, WPARAM w, LPARAM l) {
 static const wchar_t* NavText(int page) {
     switch (page) {
     case PAGE_DASH: return T(SID_NAV_DASH);
-    case PAGE_AI: return T(SID_NAV_AI);
     case PAGE_GAMES: return T(SID_NAV_GAMES);
     case PAGE_PROC: return T(SID_NAV_PROC);
     case PAGE_BOOST: return T(SID_NAV_BOOST);
@@ -565,7 +562,6 @@ static HWND hBoostLog, hBoostProg, hBoostStart, hBoostUndo, hBoostMax;
 static HWND hTweakList, hTweakDetail, hTweakApply, hTweakRevert, hTweakAll, hTweakUndoAll;
 static HWND hSysCpu, hSysRam, hSysUp, hSysTimer, hSysGraph;
 static HWND hHelpText;
-static HWND hAiInput, hAiAsk, hAiQ1, hAiQ2, hAiQ3, hAiHint, hAiOut, hAiStatus, hAiOnline;
 static HWND hProcList, hProcHint, hProcStatus, hProcMB = NULL;
 static int ProcLockMB() {
     int s = hProcMB ? (int)SendMessageW(hProcMB, CB_GETCURSEL, 0, 0) : 4;
@@ -1158,65 +1154,6 @@ static void BuildNet(HWND p) {
 }
 
 // ---------- AI advisor ----------
-static void AiAppendBlock(const std::wstring& block) {
-    int len = GetWindowTextLengthW(hAiOut);
-    SendMessageW(hAiOut, EM_SETSEL, (WPARAM)len, (LPARAM)len);
-    SendMessageW(hAiOut, EM_REPLACESEL, 0, (LPARAM)block.c_str());
-    SendMessageW(hAiOut, EM_SETSEL, (WPARAM)-1, (LPARAM)-1);
-    SendMessageW(hAiOut, EM_SCROLLCARET, 0, 0);
-}
-static void AiAsk() {
-    wchar_t q[1024];
-    GetWindowTextW(hAiInput, q, 1024);
-    size_t a = 0, b = wcslen(q);
-    while (a < b && iswspace(q[a])) a++;
-    while (b > a && iswspace(q[b - 1])) b--;
-    if (a >= b) { SetLabel(hAiStatus, T(SID_A_HINT), LR_YELLOW); return; }
-    q[b] = 0;
-    std::wstring qq = q + a;
-    SetWindowTextW(hAiInput, L"");
-    if (g_aiOnline) { // v2.1.1: online FIRST for every question; offline only as last resort
-        if (!AiOnline_AskAsync(g_hMain, qq)) {
-            SetLabel(hAiStatus, T(SID_A_THINK), LR_YELLOW);
-            SetWindowTextW(hAiInput, qq.c_str());
-            return;
-        }
-        AiAppendBlock(WFormat(L"%s: %s\r\n", T(SID_A_YOU), qq.c_str()));
-        g_aiPending = qq;
-        SetLabel(hAiStatus, T(SID_A_THINK), LR_ACCENT);
-    } else {
-        std::wstring ans = Ai_Answer(qq);
-        AiAppendBlock(WFormat(L"%s: %s\r\n%s\r\n\r\n", T(SID_A_YOU), qq.c_str(), ans.c_str()));
-        SetLabel(hAiStatus, T(SID_STATUS_READY), LR_MUTED);
-    }
-}
-static void AiOnlineDone(bool ok) {
-    std::wstring a;
-    if (ok && AiOnline_TakeResult(a)) {
-        AiAppendBlock(WFormat(L"%s (%s \u00b7 %s):\r\n%s\r\n\r\n", T(SID_NAV_AI), T(SID_A_ONTAG), AiOnline_Provider().c_str(), a.c_str()));
-        SetLabel(hAiStatus, WFormat(L"%s \u2713 \u00b7 %s", T(SID_A_ONLINE), AiOnline_Provider().c_str()), LR_ACCENT);
-    } else {
-        AiOnline_TakeResult(a);
-        std::wstring fb = Ai_Answer(g_aiPending);
-        AiAppendBlock(WFormat(L"%s:\r\n%s\r\n\r\n", T(SID_NAV_AI), fb.c_str()));
-        SetLabel(hAiStatus, T(SID_A_NOCONN), LR_YELLOW);
-    }
-}
-static void BuildAI(HWND p) {
-    hAiInput = MkEdit(p, IDC_A_INPUT, 0, 0, 700, 32);
-    hAiAsk = MkCTA(p, IDC_A_ASK, 710, 0, 160, 32, SID_A_ASK);
-    hAiQ1 = MkButton(p, IDC_A_Q1, 0, 40, 280, 30, SID_A_Q1);
-    hAiQ2 = MkButton(p, IDC_A_Q2, 290, 40, 280, 30, SID_A_Q2);
-    hAiQ3 = MkButton(p, IDC_A_Q3, 580, 40, 280, 30, SID_A_Q3);
-    hAiHint = MkLabel(p, 0, 76, 860, 22);
-    SetLabel(hAiHint, T(SID_A_HINT), LR_MUTED);
-    hAiOut = MkEdit(p, IDC_A_OUT, 0, 100, 860, 440, true, true);
-    hAiStatus = MkLabel(p, 0, 548, 860, 24);
-    SetLabel(hAiStatus, T(SID_STATUS_READY), LR_MUTED);
-    hAiOnline = MkCheck(p, IDC_A_ONLINE, 660, 76, 200, SID_A_ONLINE);
-    SetChecked(hAiOnline, g_aiOnline);
-    SetWindowTextW(hAiOut, Ai_Answer(L"").c_str());
-}
 
 // ---------- Live processes ----------
 static DWORD ProcSelectedPid() {
@@ -1321,15 +1258,14 @@ static void Hotkey_Apply() {
 }
 
 // ---------- Page management ----------
-static const int kPageOfNav[PAGE_COUNT] = {0, 1, 2, 3, 4, 5, 6};
 void UI_ShowPage(int page) {
     if (page < 0 || page >= PAGE_COUNT) return;
     g_page = page;
     for (int i = 0; i < PAGE_COUNT; i++)
         ShowWindow(g_hPages[i], i == page ? SW_SHOW : SW_HIDE);
-    static StrId titles[] = {SID_NAV_DASH, SID_NAV_AI, SID_NAV_GAMES, SID_NAV_PROC, SID_NAV_BOOST,
+    static StrId titles[] = {SID_NAV_DASH, SID_NAV_GAMES, SID_NAV_PROC, SID_NAV_BOOST,
                              SID_NAV_TWEAKS, SID_NAV_SYSTEM, SID_NAV_POWER, SID_NAV_NET, SID_NAV_HELP, SID_NAV_SETTINGS};
-    static StrId subs[] = {SID_DASH_SUB, SID_A_SUB, SID_G_SUB, SID_R_SUB, SID_B_SUB, SID_T_SUB, SID_S_SUB, SID_P_SUB, SID_N_SUB, SID_H_SUB, SID_SET_SUB};
+    static StrId subs[] = {SID_DASH_SUB, SID_G_SUB, SID_R_SUB, SID_B_SUB, SID_T_SUB, SID_S_SUB, SID_P_SUB, SID_N_SUB, SID_H_SUB, SID_SET_SUB};
     SetWindowTextW(hTitle, WFormat(L"%s   -   %s", T(titles[page]), T(subs[page])).c_str());
     InvalidateRect(hSide, NULL, TRUE);
     for (int i = 0; i < PAGE_COUNT; i++) {
@@ -1604,7 +1540,6 @@ static void DrawBtn2(const DRAWITEMSTRUCT* d) {
 static const wchar_t* NavIcon(int page) {
     switch (page) {
     case PAGE_DASH: return L"\U0001F4CA";
-    case PAGE_AI: return L"\U00002728";
     case PAGE_GAMES: return L"\U0001F3AE";
     case PAGE_PROC: return L"\U0001F9E0";
     case PAGE_BOOST: return L"\U0001F680";
@@ -2093,18 +2028,6 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         case IDC_G_LAUNCH:
             if (g_gameSel >= 0 && !g_boosting) Games_BoostLaunch(g_gameSel, g_hMain);
             break;
-        case IDC_A_ONLINE:
-            if (code == BN_CLICKED) {
-                SetChecked(hAiOnline, !IsChecked(hAiOnline));
-                InvalidateRect(hAiOnline, NULL, TRUE);
-                g_aiOnline = IsChecked(hAiOnline);
-                Settings_Save();
-            }
-            break;
-        case IDC_A_ASK: AiAsk(); break;
-        case IDC_A_Q1: SetWindowTextW(hAiInput, T(SID_A_Q1)); AiAsk(); break;
-        case IDC_A_Q2: SetWindowTextW(hAiInput, T(SID_A_Q2)); AiAsk(); break;
-        case IDC_A_Q3: SetWindowTextW(hAiInput, T(SID_A_Q3)); AiAsk(); break;
         case IDC_R_LOCK: {
             DWORD pid = ProcSelectedPid();
             if (!pid) { SetLabel(hProcStatus, T(SID_R_HINT), LR_YELLOW); break; }
@@ -2643,10 +2566,6 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             DestroyMenu(m);
         }
         break;
-    case WM_APP_AI:
-        if (w == 2) SetLabel(hAiStatus, T(SID_A_RETRY), LR_YELLOW); // rate limited, retrying
-        else AiOnlineDone(w == 1);
-        break;
     case WM_APP_UPDATE: {
         wchar_t* v = (wchar_t*)l;
         int ucode = (int)w;
@@ -2697,16 +2616,6 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         MoveWindow(hDashPic, 0, 0, pw, S(150), TRUE);
         MoveWindow(hDashTip, 0, S(448), pw, ph - S(448) - S(8), TRUE);
         MoveWindow(hGamesList, 0, 0, pw, S(236), TRUE);
-        MoveWindow(hAiInput, 0, 0, pw - S(170), S(32), TRUE);
-        MoveWindow(hAiAsk, pw - S(160), 0, S(160), S(32), TRUE);
-        { int qw = (pw - S(20)) / 3;
-        MoveWindow(hAiQ1, 0, S(40), qw, S(30), TRUE);
-        MoveWindow(hAiQ2, qw + S(10), S(40), qw, S(30), TRUE);
-        MoveWindow(hAiQ3, qw * 2 + S(20), S(40), pw - qw * 2 - S(20), S(30), TRUE); }
-        MoveWindow(hAiHint, 0, S(76), pw - S(220), S(22), TRUE);
-        MoveWindow(hAiOnline, pw - S(210), S(74), S(210), S(26), TRUE);
-        MoveWindow(hAiOut, 0, S(100), pw, ph - S(100) - S(32), TRUE);
-        MoveWindow(hAiStatus, 0, ph - S(26), pw, S(24), TRUE);
         MoveWindow(hProcList, 0, 0, pw, ph - S(150), TRUE);
         MoveWindow(hProcHint, 0, ph - S(142), pw, S(22), TRUE);
         MoveWindow(GetDlgItem(g_hPages[PAGE_PROC], IDC_R_BOOST), 0, ph - S(112), S(130), S(34), TRUE);
@@ -2838,7 +2747,6 @@ bool UI_Create(HINSTANCE hInst) {
             S(264), S(62), S(892), S(624), g_hMain, NULL, hInst, NULL);
     }
     BuildDash(g_hPages[PAGE_DASH]);
-    BuildAI(g_hPages[PAGE_AI]);
     BuildGames(g_hPages[PAGE_GAMES]);
     BuildProc(g_hPages[PAGE_PROC]);
     BuildBoost(g_hPages[PAGE_BOOST]);

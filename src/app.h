@@ -1,7 +1,7 @@
 // FPS Booster Pro - Shared header
 #pragma once
 
-#define APP_VER L"3.0.0"
+#define APP_VER L"3.1.0"
 #define HOTKEY_BOOST_ID 1
 
 #define UNICODE
@@ -26,7 +26,7 @@
 #include "strings.h"
 
 // ---------- App constants ----------
-#define APP_VERSION       L"3.0.0"
+#define APP_VERSION       L"3.1.0"
 #define APP_MUTEX         L"Global\\FPSBoosterPro_Mutex_v1"
 #define RES_ICON_APP      101
 #define RES_PNG_LOGO      201
@@ -43,11 +43,10 @@
 #define WM_APP_REFRESH    (WM_APP + 15)
 #define WM_APP_NET        (WM_APP + 16)
 #define WM_APP_AUTO       (WM_APP + 17)
-#define WM_APP_AI         (WM_APP + 18)
 #define WM_APP_UPDATE     (WM_APP + 19)
 
 // Pages
-enum PageId { PAGE_DASH = 0, PAGE_AI, PAGE_GAMES, PAGE_PROC, PAGE_BOOST, PAGE_TWEAKS, PAGE_SYSTEM, PAGE_POWER, PAGE_NET, PAGE_HELP, PAGE_SETTINGS, PAGE_COUNT };
+enum PageId { PAGE_DASH = 0, PAGE_GAMES, PAGE_PROC, PAGE_BOOST, PAGE_TWEAKS, PAGE_SYSTEM, PAGE_POWER, PAGE_NET, PAGE_HELP, PAGE_SETTINGS, PAGE_COUNT };
 
 // Tweak categories
 enum TweakCat { TCAT_GAMING = 0, TCAT_PERF, TCAT_VISUAL, TCAT_NET, TCAT_PRIV, TCAT_ADV, TCAT_ACT };
@@ -94,8 +93,6 @@ enum CtrlId {
     IDC_N_IP, IDC_N_GRADE, IDC_N_CF, IDC_N_GOOG, IDC_N_AUTO, IDC_N_DNSST, IDC_N_STATUS,
     IDC_N_DNSLIST = 1113, IDC_N_DNSAPPLY, IDC_N_PINGALL, IDC_N_FASTEST,
     IDC_N_PINGRES, IDC_N_C1, IDC_N_C2, IDC_N_CSET,
-    // ai advisor page
-    IDC_A_INPUT = 1200, IDC_A_ASK, IDC_A_OUT, IDC_A_Q1, IDC_A_Q2, IDC_A_Q3, IDC_A_STATUS, IDC_A_ONLINE,
     // live processes page
     IDC_R_LIST = 1300, IDC_R_BOOST, IDC_R_RAM, IDC_R_RESTORE, IDC_R_REFRESH, IDC_R_STATUS,
     IDC_R_LOCK, IDC_R_RAMMB, IDC_R_ADD, IDC_R_KILL,
@@ -366,12 +363,6 @@ void AutoBoostStart(HWND notifyWnd);
 void AutoBoostStop();
 bool AutoBoostWatching();
 
-// ---------- ai.cpp ----------
-std::wstring Ai_Answer(const std::wstring& q); // offline advisor, EN/FA by UI lang
-bool Ai_NeedsOnline(const std::wstring& q); // true when the online model answers better
-bool AiOnline_AskAsync(HWND w, const std::wstring& q); // threaded HTTPS, posts WM_APP_AI; false if busy
-bool AiOnline_TakeResult(std::wstring& a); // call on WM_APP_AI
-std::wstring AiOnline_Provider(); // Horde/Pollinations/Wiki after a hit
 
 // ---------- procboost.cpp ----------
 struct ProcInfo {

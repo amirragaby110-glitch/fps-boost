@@ -25,6 +25,8 @@ Everything is **backed up and reversible**, with an automatic **restore point** 
 - 🌐 **DNS ping & presets**: ping Cloudflare/Google/Quad9/OpenDNS/Shecan, apply the fastest, or set custom DNS (fixed v1.2 preset mix-up)
 - 🚀 **Startup manager**: enable/disable auto-start programs (registry + Startup folder)
 - 📋 **Specs snapshot**: GPU readout on System page + one-click copy of full system summary
+- 📦 **Setup installer**: `FPSBooster-Setup-v1.4.exe` (100 MB) — wizard with license, folder choice, shortcuts, silent `/S` install, full uninstaller + Add/Remove Programs entry
+- 🐛 **Bug fixes**: settings (language/Beast/auto-boost) now actually persist — fixed malformed settings.json; hardened startup-manager buffers
 - 🛡️ Restore point + full backup (`backup.json`) + one-click **Undo everything**
 
 ## Download & Run
@@ -136,6 +138,8 @@ MIT — see [LICENSE](LICENSE).
 - 🌐 **پینگ و انتخاب DNS**: پینگ کلادفلر/گوگل/Quad9/OpenDNS/شکن، اعمال سریع‌ترین، یا ثبت DNS دلخواه (مشکل نگاشت preset در ۱٫۲ درست شد)
 - 🚀 **مدیریت استارتاپ**: فعال/غیرفعال کردن برنامه‌های خوداجرا (رجیستری + پوشه Startup)
 - 📋 **کپی مشخصات**: نمایش GPU در صفحه سیستم + کپی مشخصات کامل سیستم با یک کلیک
+- 📦 **فایل نصب (Setup)**: `FPSBooster-Setup-v1.4.exe` (۱۰۰ مگابایت) — ویزارد نصب با لایسنس، انتخاب پوشه، میانبرها، نصب سایلنت با `/S`، حذف کامل + ثبت در Add/Remove Programs
+- 🐛 **رفع باگ**: تنظیمات (زبان/Beast/بوست خودکار) حالا واقعا ذخیره می‌مانند — فایل خراب settings.json درست شد
 - 🛡️ نقطه بازیابی + بکاپ کامل + **بازگردانی همه با یک کلیک**
 
 ## دانلود و اجرا

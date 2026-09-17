@@ -62,7 +62,7 @@ void Settings_Save() {
     char nb[128];
     snprintf(nb, 128, "{\"lang\":%d,\"tray\":%d,\"score\":%d,\"autoboost\":%d", Strings_GetLang(), g_closeToTray?1:0, g_lastScore, g_autoBoost?1:0);
     std::string j = nb;
-    j += ",\"lastBoost\":\"" + JsonEscapeW(g_lastBoost) + "\"}";
+    j += ",\"lastBoost\":\"" + JsonEscapeW(g_lastBoost) + "\"";
     j += ",\"beast\":\"" + JsonEscapeW(g_beastGuid) + "\",\"beastprev\":\"" + JsonEscapeW(g_beastPrev) + "\"}";
     WriteFileText(JoinPath(g_dataDir, L"settings.json"), j);
 }

@@ -513,6 +513,7 @@ static void StartupEnumKey(HKEY root, int loc, std::vector<StartupItem>& out) {
         for (DWORD i = 0; ; i++) {
             DWORD nl = 256, dl = sizeof(data), tp = 0;
             if (RegEnumValueW(h, i, name, &nl, NULL, &tp, data, &dl) != ERROR_SUCCESS) break;
+            name[255] = 0; data[sizeof(data) - 2] = 0; data[sizeof(data) - 1] = 0;
             if (tp != REG_SZ && tp != REG_EXPAND_SZ) continue;
             StartupItem it;
             it.name = name; it.cmd = (wchar_t*)data; it.loc = loc; it.enabled = true;
@@ -526,6 +527,7 @@ static void StartupEnumKey(HKEY root, int loc, std::vector<StartupItem>& out) {
         for (DWORD i = 0; ; i++) {
             DWORD nl = 256, dl = sizeof(data), tp = 0;
             if (RegEnumValueW(h, i, name, &nl, NULL, &tp, data, &dl) != ERROR_SUCCESS) break;
+            name[255] = 0; data[sizeof(data) - 2] = 0; data[sizeof(data) - 1] = 0;
             StartupItem it;
             it.name = name; it.cmd = (wchar_t*)data; it.loc = loc; it.enabled = false;
             out.push_back(it);

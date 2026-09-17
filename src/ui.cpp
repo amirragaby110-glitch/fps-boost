@@ -42,6 +42,13 @@ static void SetLabel(HWND h, const std::wstring& s, COLORREF c) {
     LabelColor(h, c);
     InvalidateRect(h, NULL, TRUE);
 }
+static void ProgSet(HWND h, int pct) {
+    if (!h) return;
+    if (pct < 0) pct = 0;
+    if (pct > 100) pct = 100;
+    SetWindowLongPtrW(h, GWLP_USERDATA, pct + 100); // +100: never collides with checkbox tag (1)
+    InvalidateRect(h, NULL, FALSE);
+}
 
 // ---------- Settings ----------
 static bool g_aiOnline = true;
@@ -111,19 +118,26 @@ static HWND MkEdit(HWND p, int id, int x, int y, int w, int h, bool multi = fals
     DWORD st = WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | WS_BORDER;
     if (multi) st |= ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_WANTRETURN;
     if (ro) st |= ES_READONLY;
-    HWND e = Mk(p, WC_EDITW, L"", st, WS_EX_CLIENTEDGE, x, y, w, h, id, g_hFont);
+    DWORD ex = WS_EX_CLIENTEDGE;
+    if (multi && ro && Strings_GetLang() == 1) ex |= WS_EX_RIGHT | WS_EX_RTLREADING;
+    HWND e = Mk(p, WC_EDITW, L"", st, ex, x, y, w, h, id, g_hFont);
     if (e) SendMessageW(e, EM_SETLIMITTEXT, multi ? 100000 : 1024, 0);
     return e;
 }
 static HWND MkCombo(HWND p, int id, int x, int y, int w) {
-    return Mk(p, WC_COMBOBOXW, L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
+    return Mk(p, WC_COMBOBOXW, L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_VSCROLL,
         0, x, y, w, 200, id, g_hFont);
 }
 static HWND MkList(HWND p, int id, int x, int y, int w, int h) {
     HWND l = Mk(p, WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL |
         LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP, WS_EX_CLIENTEDGE, x, y, w, h, id, g_hFont);
-    if (l) SendMessageW(l, LVM_SETEXTENDEDLISTVIEWSTYLE, 0,
-        LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_GRIDLINES);
+    if (l) {
+        SendMessageW(l, LVM_SETEXTENDEDLISTVIEWSTYLE, 0,
+            LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_GRIDLINES);
+        ListView_SetBkColor(l, COL_PANEL);
+        ListView_SetTextColor(l, COL_TEXT);
+        ListView_SetTextBkColor(l, COL_PANEL);
+    }
     return l;
 }
 static void LVCols(HWND l, const int* ids, const int* widths, int n) {
@@ -179,6 +193,7 @@ static LRESULT CALLBACK PageProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     case WM_CTLCOLORBTN:
     case WM_COMMAND:
     case WM_NOTIFY:
+    case WM_MEASUREITEM:
     case WM_DRAWITEM:
         return SendMessageW(g_hMain, m, w, l);
     }
@@ -454,11 +469,11 @@ static void BuildBoost(HWND p) {
     HWND d = MkLabel(p, 0, 0, 892, 40);
     SetLabel(d, T(SID_B_SUB), COL_MUTED);
     hBoostStart = MkCTA(p, IDC_B_START, 0, 44, 340, 56, SID_B_START);
-    hBoostUndo = MkButton(p, IDC_B_UNDO, 360, 44, 220, 56, SID_B_UNDO);
+    hBoostUndo = MkCTA(p, IDC_B_UNDO, 360, 44, 220, 56, SID_B_UNDO);
     hBoostMax = MkCTA(p, IDC_B_MAX, 600, 44, 292, 56, SID_B_MAXFPS);
-    hBoostProg = Mk(p, PROGRESS_CLASSW, L"", WS_CHILD | WS_VISIBLE | PBS_SMOOTH, 0,
+    hBoostProg = Mk(p, WC_STATICW, L"", WS_CHILD | WS_VISIBLE | SS_OWNERDRAW, 0,
         0, 114, 892, 26, IDC_B_PROG, NULL);
-    SendMessageW(hBoostProg, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
+    ProgSet(hBoostProg, 0);
     hBoostLog = Mk(p, WC_LISTBOXW, L"", WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL |
         WS_BORDER | WS_TABSTOP, WS_EX_CLIENTEDGE, 0, 152, 892, 440, IDC_B_LOG, g_hFont);
 }
@@ -468,7 +483,7 @@ void UI_LogBoost(const wchar_t* line) {
     SendMessageW(hBoostLog, LB_SETTOPINDEX, i, 0);
 }
 void UI_BoostProgress(int pct) {
-    if (hBoostProg) SendMessageW(hBoostProg, PBM_SETPOS, pct, 0);
+    ProgSet(hBoostProg, pct);
 }
 void UI_BoostDone(bool ok) {
     EnableWindow(hBoostStart, TRUE);
@@ -790,9 +805,9 @@ static void BuildNet(HWND p) {
     hNetStatus = MkLabel(p, 0, 4, 700, 26, g_hFontBig);
     SetLabel(hNetStatus, T(SID_STATUS_READY), COL_TEXT);
     HWND srv = MkLabel(p, 0, 32, 400, 24); SetLabel(srv, T(SID_N_SERVER), COL_MUTED);
-    hNetProg = Mk(p, PROGRESS_CLASSW, L"", WS_CHILD | WS_VISIBLE | PBS_SMOOTH, 0,
+    hNetProg = Mk(p, WC_STATICW, L"", WS_CHILD | WS_VISIBLE | SS_OWNERDRAW, 0,
         0, 60, 892, 26, IDC_N_PROG, NULL);
-    SendMessageW(hNetProg, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
+    ProgSet(hNetProg, 0);
     hNetPing = MkLabel(p, 0, 96, 200, 34, g_hFontBig);
     hNetDown = MkLabel(p, 220, 96, 300, 34, g_hFontBig);
     hNetUp = MkLabel(p, 540, 96, 300, 34, g_hFontBig);
@@ -1004,6 +1019,72 @@ void UI_GameEvent(int phase, const wchar_t* info) {
 }
 
 // ---------- Owner drawing ----------
+static void DrawProg(const DRAWITEMSTRUCT* d) {
+    HDC dc = d->hDC;
+    RECT r = d->rcItem;
+    HBRUSH pb = CreateSolidBrush(COL_PANEL);
+    FillRect(dc, &r, pb);
+    DeleteObject(pb);
+    int pct = (int)GetWindowLongPtrW(d->hwndItem, GWLP_USERDATA) - 100;
+    if (pct < 0) pct = 0;
+    if (pct > 100) pct = 100;
+    Graphics g(dc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+    int rad = (r.bottom - r.top) / 2 - S(2);
+    if (rad < 2) rad = 2;
+    GraphicsPath track;
+    track.AddArc(r.left, r.top + S(2), rad * 2, rad * 2, 180, 90);
+    track.AddArc(r.right - rad * 2 - 1, r.top + S(2), rad * 2, rad * 2, 270, 90);
+    track.AddArc(r.right - rad * 2 - 1, r.bottom - S(2) - rad * 2, rad * 2, rad * 2, 0, 90);
+    track.AddArc(r.left, r.bottom - S(2) - rad * 2, rad * 2, rad * 2, 90, 90);
+    track.CloseFigure();
+    SolidBrush tbr(Color(255, 10, 14, 26));
+    g.FillPath(&tbr, &track);
+    Pen edge(Color(255, 60, 80, 120), 1);
+    g.DrawPath(&edge, &track);
+    if (pct > 0) {
+        int fw = (r.right - r.left) * pct / 100;
+        if (fw > 0) {
+            g.SetClip(&track);
+            LinearGradientBrush fbr(Point(r.left, r.top), Point(r.right, r.top),
+                Color(255, 34, 211, 238), Color(255, 232, 121, 249));
+            g.FillRectangle(&fbr, r.left, r.top, fw, r.bottom - r.top);
+            g.ResetClip();
+        }
+    }
+    wchar_t t[16];
+    StringCchPrintfW(t, 16, L"%d%%", pct);
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, COL_TEXT);
+    HFONT old = (HFONT)SelectObject(dc, g_hFont);
+    DrawTextW(dc, t, -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(dc, old);
+}
+static void DrawCombo(const DRAWITEMSTRUCT* d) {
+    HDC dc = d->hDC;
+    RECT r = d->rcItem;
+    bool edit = (d->itemID == (UINT)-1);
+    bool sel = !edit && (d->itemState & ODS_SELECTED) != 0;
+    bool cdis = (d->itemState & ODS_DISABLED) != 0;
+    HBRUSH b = CreateSolidBrush(sel ? COL_SELBAR : RGB(10, 14, 26));
+    FillRect(dc, &r, b);
+    DeleteObject(b);
+    if (edit) {
+        HBRUSH fb = CreateSolidBrush(RGB(70, 90, 130));
+        FrameRect(dc, &r, fb);
+        DeleteObject(fb);
+    }
+    wchar_t txt[256]; txt[0] = 0;
+    if (edit) GetWindowTextW(d->hwndItem, txt, 256);
+    else if (d->itemID != (UINT)-1) SendMessageW(d->hwndItem, CB_GETLBTEXT, d->itemID, (LPARAM)txt);
+    RECT tr = r; tr.left += S(6); tr.right -= S(4);
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, cdis ? COL_MUTED : (sel ? RGB(255, 255, 255) : COL_TEXT));
+    HFONT old = (HFONT)SelectObject(dc, g_hFont);
+    DrawTextW(dc, txt, -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    SelectObject(dc, old);
+    if ((d->itemState & ODS_FOCUS) && !edit) DrawFocusRect(dc, &r);
+}
 static void DrawCTA(const DRAWITEMSTRUCT* d) {
     HDC dc = d->hDC;
     RECT r = d->rcItem;
@@ -1093,11 +1174,26 @@ static void DrawCheckBtn(const DRAWITEMSTRUCT* d) {
     FillRect(dc, &r, bg);
     DeleteObject(bg);
     bool checked = SendMessageW(d->hwndItem, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    bool cdis = (d->itemState & ODS_DISABLED) != 0;
     int bs = S(18);
     RECT box = {r.left, (r.top + r.bottom - bs) / 2, r.left + bs, (r.top + r.bottom + bs) / 2};
-    UINT st = DFCS_BUTTONCHECK | (checked ? DFCS_CHECKED : 0);
-    if (d->itemState & ODS_DISABLED) st |= DFCS_INACTIVE;
-    DrawFrameControl(dc, &box, DFC_BUTTON, st);
+    HBRUSH bb = CreateSolidBrush(checked && !cdis ? COL_SELBAR : RGB(10, 14, 26));
+    FillRect(dc, &box, bb);
+    DeleteObject(bb);
+    HBRUSH fb = CreateSolidBrush(cdis ? RGB(90, 100, 130) : (checked ? COL_ACCENT : RGB(120, 140, 175)));
+    FrameRect(dc, &box, fb);
+    DeleteObject(fb);
+    if (checked) {
+        int pw = S(2); if (pw < 2) pw = 2;
+        HPEN cp = CreatePen(PS_SOLID, pw, cdis ? RGB(140, 150, 170) : COL_ACCENT);
+        HPEN ocp = (HPEN)SelectObject(dc, cp);
+        int qx = box.left + bs / 4, qy = box.top + bs / 2;
+        MoveToEx(dc, qx, qy, NULL);
+        LineTo(dc, qx + bs / 5, qy + bs / 5);
+        LineTo(dc, box.right - bs / 5, box.top + bs / 4);
+        SelectObject(dc, ocp);
+        DeleteObject(cp);
+    }
     wchar_t txt[256];
     GetWindowTextW(d->hwndItem, txt, 256);
     RECT tr = {box.right + S(8), r.top, r.right, r.bottom};
@@ -1243,14 +1339,21 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         SetBkColor(dc, RGB(10, 14, 26));
         return (LRESULT)hBrEdit;
     }
+    case WM_MEASUREITEM: {
+        LPMEASUREITEMSTRUCT m = (LPMEASUREITEMSTRUCT)l;
+        if (m && m->CtlType == ODT_COMBOBOX) m->itemHeight = (UINT)S(24);
+        return TRUE;
+    }
     case WM_DRAWITEM: {
         const DRAWITEMSTRUCT* d = (const DRAWITEMSTRUCT*)l;
         if (!d) break;
+        if (d->CtlType == ODT_COMBOBOX) { DrawCombo(d); return TRUE; }
         int id = (int)d->CtlID;
         if (id >= IDC_NAV_BASE && id < IDC_NAV_BASE + PAGE_COUNT) { DrawNav(d); return TRUE; }
-        if (GetWindowLongPtrW(d->hwndItem, GWLP_USERDATA) == 1) { DrawCheckBtn(d); return TRUE; }
         if (id == IDC_S_GRAPH) { DrawGraph(d); return TRUE; }
         if (id == IDC_DASH_PIC) { DrawDashPic(d); return TRUE; }
+        if (id == IDC_B_PROG || id == IDC_N_PROG) { DrawProg(d); return TRUE; }
+        if (GetWindowLongPtrW(d->hwndItem, GWLP_USERDATA) == 1) { DrawCheckBtn(d); return TRUE; }
         DrawCTA(d);
         return TRUE;
     }
@@ -1536,7 +1639,7 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
                 SetLabel(hNetDown, WFormat(L"%s: ...", T(SID_N_DOWN)), COL_TEXT);
                 SetLabel(hNetUp, WFormat(L"%s: ...", T(SID_N_UP)), COL_TEXT);
                 SetLabel(hNetGrade, WFormat(L"%s: --", T(SID_N_GRADE)), COL_TEXT);
-                SendMessageW(hNetProg, PBM_SETPOS, 0, 0);
+                ProgSet(hNetProg, 0);
                 EnableWindow(hNetStart, FALSE);
                 EnableWindow(hNetCancel, TRUE);
                 NetTestRun(g_hMain);
@@ -1690,15 +1793,15 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         else if (phase == 1) {
             double* d = (double*)l;
             if (d) { SetLabel(hNetDown, WFormat(L"%s: %.1f Mbps", T(SID_N_DOWN), *d), COL_TEXT); delete d; }
-            SendMessageW(hNetProg, PBM_SETPOS, 30, 0);
+            ProgSet(hNetProg, 30);
         }
-        else if (phase == 2) SendMessageW(hNetProg, PBM_SETPOS, 55, 0);
+        else if (phase == 2) ProgSet(hNetProg, 55);
         else if (phase == 3) {
             double* d = (double*)l;
             if (d) { SetLabel(hNetUp, WFormat(L"%s: %.1f Mbps", T(SID_N_UP), *d), COL_TEXT); delete d; }
-            SendMessageW(hNetProg, PBM_SETPOS, 80, 0);
+            ProgSet(hNetProg, 80);
         }
-        else if (phase == 4) SendMessageW(hNetProg, PBM_SETPOS, 90, 0);
+        else if (phase == 4) ProgSet(hNetProg, 90);
         else if (phase == 5) {
             wchar_t* ip = (wchar_t*)l;
             if (ip) { SetLabel(hNetIp, WFormat(L"%s: %s", T(SID_N_IP), ip), COL_TEXT); delete[] ip; }
@@ -1710,7 +1813,7 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             if (gi < 0) gi = 0; if (gi > 3) gi = 3;
             SetLabel(hNetGrade, WFormat(L"%s: %s", T(SID_N_GRADE), T(g[gi])), c[gi]);
             SetLabel(hNetStatus, T(SID_B_DONE), COL_GREEN);
-            SendMessageW(hNetProg, PBM_SETPOS, 100, 0);
+            ProgSet(hNetProg, 100);
             EnableWindow(hNetStart, TRUE);
             EnableWindow(hNetCancel, FALSE);
         }

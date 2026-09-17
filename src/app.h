@@ -1,7 +1,7 @@
 // FPS Booster Pro - Shared header
 #pragma once
 
-#define APP_VER L"3.1.0"
+#define APP_VER L"3.2.0"
 #define HOTKEY_BOOST_ID 1
 
 #define UNICODE
@@ -26,7 +26,7 @@
 #include "strings.h"
 
 // ---------- App constants ----------
-#define APP_VERSION       L"3.1.0"
+#define APP_VERSION       L"3.2.0"
 #define APP_MUTEX         L"Global\\FPSBoosterPro_Mutex_v1"
 #define RES_ICON_APP      101
 #define RES_PNG_LOGO      201
@@ -92,7 +92,7 @@ enum CtrlId {
     IDC_N_START = 1100, IDC_N_CANCEL, IDC_N_PROG, IDC_N_PING, IDC_N_DOWN, IDC_N_UP,
     IDC_N_IP, IDC_N_GRADE, IDC_N_CF, IDC_N_GOOG, IDC_N_AUTO, IDC_N_DNSST, IDC_N_STATUS,
     IDC_N_DNSLIST = 1113, IDC_N_DNSAPPLY, IDC_N_PINGALL, IDC_N_FASTEST,
-    IDC_N_PINGRES, IDC_N_C1, IDC_N_C2, IDC_N_CSET,
+    IDC_N_PINGRES, IDC_N_C1, IDC_N_C2, IDC_N_CSET, IDC_N_COPY,
     // live processes page
     IDC_R_LIST = 1300, IDC_R_BOOST, IDC_R_RAM, IDC_R_RESTORE, IDC_R_REFRESH, IDC_R_STATUS,
     IDC_R_LOCK, IDC_R_RAMMB, IDC_R_ADD, IDC_R_KILL,

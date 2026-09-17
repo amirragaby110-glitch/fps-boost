@@ -12,9 +12,11 @@
 #define NET_HOST L"speed.cloudflare.com"
 #define NET_IP_HOST L"www.cloudflare.com"
 
-// WM_APP_NET phases (wParam):
-// 0 ping done (lParam=ms), 1 down progress (%), 2 down done (mbps*100),
-// 3 up progress (%), 4 up done (mbps*100), 5 all done, 6 error, 7 ip (heap str)
+// WM_APP_NET phases (wParam) - must match ui.cpp handler:
+// 0 ping done (lParam=ms), 1 down live (lParam=new double Mbps),
+// 2 down done, 3 up live (lParam=new double Mbps), 4 up done,
+// 5 ip (lParam=new wchar_t[]), 6 grade done (lParam=0..3),
+// 7 error, 8 cancelled, 10..16 dns ping (lParam=ms), 20 ping-all done
 
 static volatile bool g_netCancel = false;
 static bool g_netBusy = false;
@@ -139,9 +141,10 @@ static double DownTest(HWND w) { // Mbps
         bytes += 5000000;
         secs += ms / 1000.0;
         chunks++;
-        DWORD el = GetTickCount() - start;
-        PostMessageW(w, WM_APP_NET, 1, (LPARAM)(el >= 8000 ? 100 : (int)(el * 100 / 8000)));
+        double cur = bytes * 8.0 / secs / 1000000.0;
+        PostMessageW(w, WM_APP_NET, 1, (LPARAM)(new double(cur)));
     }
+    if (!g_netCancel) PostMessageW(w, WM_APP_NET, 2, 0);
     if (secs <= 0 || bytes == 0) return 0;
     return bytes * 8.0 / secs / 1000000.0;
 }
@@ -160,9 +163,10 @@ static double UpTest(HWND w) { // Mbps
         bytes += 1048576;
         secs += ms / 1000.0;
         n++;
-        DWORD el = GetTickCount() - start;
-        PostMessageW(w, WM_APP_NET, 3, (LPARAM)(el >= 6000 ? 100 : (int)(el * 100 / 6000)));
+        double cur = bytes * 8.0 / secs / 1000000.0;
+        PostMessageW(w, WM_APP_NET, 3, (LPARAM)(new double(cur)));
     }
+    if (!g_netCancel) PostMessageW(w, WM_APP_NET, 4, 0);
     delete[] buf;
     if (secs <= 0 || bytes == 0) return 0;
     return bytes * 8.0 / secs / 1000000.0;
@@ -180,21 +184,23 @@ static DWORD WINAPI NetThread(LPVOID a) {
     if (NetGetIP(ip) && !ip.empty()) {
         wchar_t* p = new wchar_t[ip.size() + 1];
         wcscpy(p, ip.c_str());
-        PostMessageW(w, WM_APP_NET, 7, (LPARAM)p);
+        PostMessageW(w, WM_APP_NET, 5, (LPARAM)p);
     }
     int ping = PingTest();
-    if (g_netCancel) { g_netBusy = false; PostMessageW(w, WM_APP_NET, 5, 0); return 0; }
-    if (ping < 0) { g_netBusy = false; PostMessageW(w, WM_APP_NET, 6, 0); return 0; }
+    if (g_netCancel) { g_netBusy = false; PostMessageW(w, WM_APP_NET, 8, 0); return 0; }
+    if (ping < 0) { g_netBusy = false; PostMessageW(w, WM_APP_NET, 7, 0); return 0; }
     PostMessageW(w, WM_APP_NET, 0, (LPARAM)ping);
     double dn = DownTest(w);
-    if (!g_netCancel) PostMessageW(w, WM_APP_NET, 2, (LPARAM)(int)(dn * 100));
     double up = 0;
-    if (!g_netCancel) {
-        up = UpTest(w);
-        if (!g_netCancel) PostMessageW(w, WM_APP_NET, 4, (LPARAM)(int)(up * 100));
-    }
+    if (!g_netCancel) up = UpTest(w);
+    if (g_netCancel) { g_netBusy = false; PostMessageW(w, WM_APP_NET, 8, 0); return 0; }
+    int gi;
+    if (ping <= 50 && dn >= 50) gi = 0;
+    else if (ping <= 100 && dn >= 20) gi = 1;
+    else if (dn >= 5) gi = 2;
+    else gi = 3;
     g_netBusy = false;
-    PostMessageW(w, WM_APP_NET, 5, 0);
+    PostMessageW(w, WM_APP_NET, 6, (LPARAM)gi);
     LogW(L"Speed test done: ping=%d down=%.1f up=%.1f", ping, dn, up);
     return 0;
 }
@@ -288,9 +294,9 @@ static void DnsFlush() {
     RunHidden(JoinPath(sysdir, L"ipconfig.exe").c_str(), L"/flushdns");
 }
 
-// preset: 0 restore/auto, 1 cloudflare, 2 google, 3 quad9, 4 opendns, 5 shecan
-static const wchar_t* kDns1[] = {L"1.1.1.1", L"8.8.8.8", L"9.9.9.9", L"208.67.222.222", L"178.22.122.100"};
-static const wchar_t* kDns2[] = {L"1.0.0.1", L"8.8.4.4", L"149.112.112.112", L"208.67.220.220", L"185.51.200.2"};
+// preset: 0 restore/auto, 1 cloudflare, 2 google, 3 quad9, 4 opendns, 5 shecan, 6 electro, 7 adguard
+static const wchar_t* kDns1[] = {L"1.1.1.1", L"8.8.8.8", L"9.9.9.9", L"208.67.222.222", L"178.22.122.100", L"78.157.42.100", L"94.140.14.14"};
+static const wchar_t* kDns2[] = {L"1.0.0.1", L"8.8.4.4", L"149.112.112.112", L"208.67.220.220", L"185.51.200.2", L"78.157.42.101", L"94.140.15.15"};
 bool DnsSetPreset(int preset) {
     std::vector<DnsAd> ads;
     if (!DnsEnum(ads)) return false;
@@ -329,7 +335,7 @@ bool DnsSetPreset(int preset) {
             if (done) ok++;
         }
     } else {
-        if (preset < 1 || preset > 5) return false;
+        if (preset < 1 || preset > 7) return false;
         const wchar_t* d1 = kDns1[preset - 1];
         const wchar_t* d2 = kDns2[preset - 1];
         for (size_t i = 0; i < ads.size(); i++)
@@ -406,12 +412,12 @@ static DWORD WINAPI PingThread(LPVOID arg) {
     PingCtx* c = (PingCtx*)arg;
     HWND w = c->w;
     delete c;
-    for (int i = 0; i < 5 && !g_pingCancel; i++) {
+    for (int i = 0; i < 7 && !g_pingCancel; i++) {
         int ms = PingAvgMs(kDns1[i]);
         PostMessageW(w, WM_APP_NET, (WPARAM)(10 + i), (LPARAM)ms);
     }
     g_pingBusy = false;
-    PostMessageW(w, WM_APP_NET, (WPARAM)15, 0);
+    PostMessageW(w, WM_APP_NET, (WPARAM)20, 0); // 20 = done (10..16 are results)
     return 0;
 }
 void DnsPingAll(HWND notifyWnd) {

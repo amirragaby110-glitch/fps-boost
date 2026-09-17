@@ -914,7 +914,8 @@ static const char* kHelpEN =
 "\r\n7) INTERNET (SPEED TEST + DNS)\r\n"
 "- Internet page: real ping, download and upload test with gaming grade.\r\n"
 "- Public IP is shown automatically after the test.\r\n"
-"- One-click gaming DNS: Cloudflare 1.1.1.1 or Google 8.8.8.8.\r\n"
+"- One-click gaming DNS: 7 options - Cloudflare, Google, Quad9,\r\n"
+"  OpenDNS, Shecan, Electro, AdGuard - plus custom IPv4.\r\n"
 "- Automatic (restore) brings back your original DNS.\r\n"
 "\r\n8) AUTO-BOOST + DISPLAY\r\n"
 "- My Games: enable Auto-boost to speed up library games on launch.\r\n"
@@ -924,7 +925,7 @@ static const char* kHelpEN =
 "- Applies all 27 tweaks, Beast Mode, stops background services, closes bloat,\r\n"
 "  and even lowers resolution. Undo restores everything.\r\n"
 "\r\n10) DNS PING + STARTUP\r\n"
-"- Internet page: Ping all compares 5 DNS servers, Apply fastest uses the best.\r\n"
+"- Internet page: Ping all compares 7 DNS servers, Apply fastest uses the best.\r\n"
 "- Custom DNS boxes accept any IPv4 pair.\r\n"
 "- Settings page: Startup manager enables/disables auto-start programs.\r\n";
 static const char* kHelpFA =
@@ -966,7 +967,8 @@ static const char* kHelpFA =
 "\r\n۷) اینترنت (تست سرعت + DNS)\r\n"
 "- صفحه اینترنت: تست واقعی پینگ، دانلود و آپلود با رتبه گیمینگ.\r\n"
 "- آی‌پی عمومی بعد از تست خودکار نمایش داده می‌شود.\r\n"
-"- DNS گیمینگ با یک کلیک: کلادفلر 1.1.1.1 یا گوگل 8.8.8.8.\r\n"
+"- DNS گیمینگ با یک کلیک: ۷ گزینه (کلادفلر، گوگل، Quad9،\r\n"
+"  OpenDNS، شکن، الکترو، AdGuard) + دلخواه.\r\n"
 "- گزینه خودکار DNS اصلی شما را برمی‌گرداند.\r\n"
 "\r\n۸) بوست خودکار + نمایشگر\r\n"
 "- در بازی‌ها: بوست خودکار بازی‌های کتابخانه هنگام اجرا.\r\n"
@@ -976,7 +978,7 @@ static const char* kHelpFA =
 "- هر ۲۷ توییک، Beast Mode، توقف سرویس‌ها، بستن برنامه‌های اضافه و حتی\r\n"
 "  پایین آوردن رزولوشن. Undo همه چیز را برمی‌گرداند.\r\n"
 "\r\n۱۰) پینگ DNS + استارتاپ\r\n"
-"- صفحه اینترنت: پینگ همه ۵ سرور DNS را مقایسه می‌کند و سریع‌ترین اعمال می‌شود.\r\n"
+"- صفحه اینترنت: پینگ همه ۷ سرور DNS را مقایسه می‌کند و سریع‌ترین اعمال می‌شود.\r\n"
 "- کادرهای DNS دلخواه هر IPv4 را قبول می‌کنند.\r\n"
 "- صفحه تنظیمات: مدیریت استارتاپ برنامه‌های خوداجرا را فعال/غیرفعال می‌کند.\r\n";
 static void BuildHelp(HWND p) {
@@ -1097,8 +1099,8 @@ static HWND hNetStatus = NULL, hNetProg = NULL, hNetPing = NULL, hNetDown = NULL
 static HWND hNetUp = NULL, hNetIp = NULL, hNetGrade = NULL, hNetDnsSt = NULL;
 static HWND hNetStart = NULL, hNetCancel = NULL;
 static HWND hNetDns = NULL, hNetDnsApply = NULL, hNetPingAll = NULL, hNetFastest = NULL;
-static HWND hNetPingRes = NULL, hNetC1 = NULL, hNetC2 = NULL;
-static int g_dnsPingMs[5] = {-1, -1, -1, -1, -1};
+static HWND hNetPingRes = NULL, hNetC1 = NULL, hNetC2 = NULL, hNetCopy = NULL;
+static int g_dnsPingMs[7] = {-1, -1, -1, -1, -1, -1, -1};
 static void NetRefresh() {
     if (!hNetDnsSt) return;
     SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), LR_TEXT);
@@ -1125,6 +1127,7 @@ static void BuildNet(HWND p) {
     SetLabel(hNetGrade, WFormat(L"%s: --", T(SID_N_GRADE)), LR_TEXT);
     hNetStart = MkCTA(p, IDC_N_START, 0, 176, 300, 54, SID_N_START);
     hNetCancel = MkButton(p, IDC_N_CANCEL, 320, 176, 200, 54, SID_N_CANCEL);
+    hNetCopy = MkButton(p, IDC_N_COPY, 530, 176, 170, 54, SID_N_COPY);
     EnableWindow(hNetCancel, FALSE);
     MkHeader(p, 0, 248, 400, SID_N_DNS_T);
     hNetDnsSt = MkLabel(p, 0, 278, 892, 26);
@@ -1135,6 +1138,8 @@ static void BuildNet(HWND p) {
     SendMessageW(hNetDns, CB_ADDSTRING, 0, (LPARAM)T(SID_N_DNS_Q9));
     SendMessageW(hNetDns, CB_ADDSTRING, 0, (LPARAM)T(SID_N_DNS_ODNS));
     SendMessageW(hNetDns, CB_ADDSTRING, 0, (LPARAM)T(SID_N_DNS_SHECAN));
+    SendMessageW(hNetDns, CB_ADDSTRING, 0, (LPARAM)T(SID_N_DNS_ELECTRO));
+    SendMessageW(hNetDns, CB_ADDSTRING, 0, (LPARAM)T(SID_N_DNS_ADGUARD));
     SendMessageW(hNetDns, CB_ADDSTRING, 0, (LPARAM)T(SID_N_DNS_CUSTOMITEM));
     SendMessageW(hNetDns, CB_SETCURSEL, 0, 0);
     hNetDnsApply = MkButton(p, IDC_N_DNSAPPLY, 310, 306, 110, 34, SID_S_RES_APPLY);
@@ -2314,12 +2319,23 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         case IDC_N_CANCEL:
             NetTestCancel();
             break;
+        case IDC_N_COPY: {
+            wchar_t a[160], b[160], c[160], d[200], e[200];
+            a[0] = b[0] = c[0] = d[0] = e[0] = 0;
+            GetWindowTextW(hNetPing, a, 160); GetWindowTextW(hNetDown, b, 160);
+            GetWindowTextW(hNetUp, c, 160); GetWindowTextW(hNetIp, d, 200);
+            GetWindowTextW(hNetGrade, e, 200);
+            std::wstring s = WFormat(L"FPS Booster - %s\r\n%s\r\n%s\r\n%s\r\n%s\r\n%s",
+                T(SID_NAV_NET), a, b, c, d, e);
+            if (CopyTextToClipboard(s)) SetWindowTextW(hStatusBar, T(SID_S_COPIED));
+            break;
+        }
         case IDC_N_DNSAPPLY: {
             int si = (int)SendMessageW(hNetDns, CB_GETCURSEL, 0, 0);
-            if (si >= 0 && si <= 5) {
+            if (si >= 0 && si <= 7) {
                 DnsPingCancel();
                 if (DnsSetPreset(si)) SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), LR_GREEN);
-            } else if (si == 6) {
+            } else if (si == 8) {
                 wchar_t d1[64], d2[64]; d1[0] = 0; d2[0] = 0;
                 GetWindowTextW(hNetC1, d1, 64); GetWindowTextW(hNetC2, d2, 64);
                 if (DnsSetCustom(d1, d2)) SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), LR_GREEN);
@@ -2328,7 +2344,7 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         }
         case IDC_N_PINGALL:
             if (!DnsPingBusy()) {
-                for (int i = 0; i < 5; i++) g_dnsPingMs[i] = -1;
+                for (int i = 0; i < 7; i++) g_dnsPingMs[i] = -1;
                 SetWindowTextW(hNetPingRes, T(SID_N_PINGING));
                 EnableWindow(hNetFastest, FALSE);
                 DnsPingAll(g_hMain);
@@ -2336,7 +2352,7 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             break;
         case IDC_N_FASTEST: {
             int bi = -1;
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 7; i++)
                 if (g_dnsPingMs[i] >= 0 && (bi < 0 || g_dnsPingMs[i] < g_dnsPingMs[bi])) bi = i;
             if (bi >= 0) {
                 SendMessageW(hNetDns, CB_SETCURSEL, bi + 1, 0);
@@ -2348,7 +2364,7 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             wchar_t d1[64], d2[64]; d1[0] = 0; d2[0] = 0;
             GetWindowTextW(hNetC1, d1, 64); GetWindowTextW(hNetC2, d2, 64);
             if (DnsSetCustom(d1, d2)) {
-                SendMessageW(hNetDns, CB_SETCURSEL, 6, 0);
+                SendMessageW(hNetDns, CB_SETCURSEL, 8, 0);
                 SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), LR_GREEN);
             }
             break;
@@ -2506,7 +2522,7 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             int gi = (int)l;
             if (gi < 0) gi = 0; if (gi > 3) gi = 3;
             SetLabel(hNetGrade, WFormat(L"%s: %s", T(SID_N_GRADE), T(g[gi])), c[gi]);
-            SetLabel(hNetStatus, T(SID_B_DONE), LR_GREEN);
+            SetLabel(hNetStatus, T(SID_MSG_DONE), LR_GREEN);
             ProgSet(hNetProg, 100);
             EnableWindow(hNetStart, TRUE);
             EnableWindow(hNetCancel, FALSE);
@@ -2516,11 +2532,16 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             EnableWindow(hNetStart, TRUE);
             EnableWindow(hNetCancel, FALSE);
         }
-        else if (phase >= 10 && phase <= 14) {
+        else if (phase == 8) {
+            SetLabel(hNetStatus, T(SID_N_CANCELLED), LR_MUTED);
+            EnableWindow(hNetStart, TRUE);
+            EnableWindow(hNetCancel, FALSE);
+        }
+        else if (phase >= 10 && phase <= 16) {
             int idx = phase - 10;
             int ms = (int)l;
             g_dnsPingMs[idx] = ms;
-            static StrId dn[] = {SID_N_DNS_CF, SID_N_DNS_GOOG, SID_N_DNS_Q9, SID_N_DNS_ODNS, SID_N_DNS_SHECAN};
+            static StrId dn[] = {SID_N_DNS_CF, SID_N_DNS_GOOG, SID_N_DNS_Q9, SID_N_DNS_ODNS, SID_N_DNS_SHECAN, SID_N_DNS_ELECTRO, SID_N_DNS_ADGUARD};
             wchar_t cur[1024]; cur[0] = 0;
             GetWindowTextW(hNetPingRes, cur, 1024);
             std::wstring s = cur;
@@ -2529,9 +2550,9 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             s += WFormat(L"%s: %s", T(dn[idx]), ms >= 0 ? WFormat(L"%d ms", ms).c_str() : L"--");
             SetWindowTextW(hNetPingRes, s.c_str());
         }
-        else if (phase == 15) {
+        else if (phase == 20) {
             int bi = -1;
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 7; i++)
                 if (g_dnsPingMs[i] >= 0 && (bi < 0 || g_dnsPingMs[i] < g_dnsPingMs[bi])) bi = i;
             if (bi >= 0) {
                 wchar_t cur[1024]; cur[0] = 0;

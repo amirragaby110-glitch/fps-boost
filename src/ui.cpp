@@ -208,8 +208,8 @@ static void ProgSet(HWND h, int pct) {
 }
 
 // ---------- Settings ----------
-static std::wstring g_aiPending;
 std::wstring g_lastBoost;
+std::wstring g_lastVer;
 void Settings_Load() {
     g_lastBoost.clear();
     std::string text;
@@ -219,6 +219,7 @@ void Settings_Load() {
     Strings_SetLang(root.num("lang", 1));
     g_closeToTray = root.num("tray", 1) != 0;
     g_lastBoost = root.wstr("lastBoost");
+    g_lastVer = root.wstr("lastver");
     g_lastScore = root.num("score", 0);
     g_beastGuid = root.wstr("beast");
     g_beastPrev = root.wstr("beastprev");
@@ -232,9 +233,20 @@ void Settings_Save() {
     snprintf(nb, 128, "{\"lang\":%d,\"tray\":%d,\"score\":%d,\"autoboost\":%d", Strings_GetLang(), g_closeToTray?1:0, g_lastScore, g_autoBoost?1:0);
     std::string j = nb;
     j += ",\"lastBoost\":\"" + JsonEscapeW(g_lastBoost) + "\"";
+    j += ",\"lastver\":\"" + JsonEscapeW(g_lastVer) + "\"";
     j += ",\"beast\":\"" + JsonEscapeW(g_beastGuid) + "\",\"beastprev\":\"" + JsonEscapeW(g_beastPrev) + "\"";
     j += ",\"theme\":" + std::to_string(g_themeMode) + ",\"accent\":" + std::to_string(g_accent) + ",\"hotkey\":" + std::to_string(g_hotkey ? 1 : 0) + "}";
     WriteFileText(JoinPath(g_dataDir, L"settings.json"), j);
+}
+// First run of a new version: announce it so updates are unmistakable.
+void UI_MaybeShowWhatsNew() {
+    if (g_lastVer == APP_VER) return;
+    g_lastVer = APP_VER;
+    Settings_Save();
+    UINT flags = MB_OK | MB_ICONINFORMATION;
+    if (Strings_GetLang() == 1) flags |= MB_RTLREADING | MB_RIGHT;
+    MessageBoxW(g_hMain, T(SID_NEW_BODY),
+                WFormat(L"%s (v%s)", T(SID_NEW_TITLE), APP_VER).c_str(), flags);
 }
 
 // ---------- Control helpers ----------

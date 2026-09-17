@@ -114,6 +114,7 @@ int main() {
     bool startMin = wcsstr(GetCommandLineW(), L"/min") != NULL;
     if (startMin && g_closeToTray) ShowWindow(g_hMain, SW_HIDE);
     else { ShowWindow(g_hMain, SW_SHOW); UpdateWindow(g_hMain); }
+    if (!(startMin && g_closeToTray)) UI_MaybeShowWhatsNew();
 
     MSG msg;
     while (GetMessageW(&msg, NULL, 0, 0) > 0) {

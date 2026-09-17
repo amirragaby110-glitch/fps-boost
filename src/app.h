@@ -1,7 +1,7 @@
 // FPS Booster Pro - Shared header
 #pragma once
 
-#define APP_VER L"3.2.0"
+#define APP_VER L"3.2.1"
 #define HOTKEY_BOOST_ID 1
 
 #define UNICODE
@@ -26,7 +26,7 @@
 #include "strings.h"
 
 // ---------- App constants ----------
-#define APP_VERSION       L"3.2.0"
+#define APP_VERSION       L"3.2.1"
 #define APP_MUTEX         L"Global\\FPSBoosterPro_Mutex_v1"
 #define RES_ICON_APP      101
 #define RES_PNG_LOGO      201
@@ -320,6 +320,7 @@ bool Games_IsBusy();
 void Settings_Load();
 void Settings_Save();
 extern std::wstring g_lastBoost;
+extern std::wstring g_lastVer;
 
 // ---------- power.cpp ----------
 struct PowerSetting {
@@ -384,6 +385,7 @@ int  Proc_TrimAll(); // EmptyWorkingSet on all user processes, returns count
 // ---------- ui.cpp ----------
 bool UI_Create(HINSTANCE hInst);
 void UI_ShowPage(int page);
+void UI_MaybeShowWhatsNew(); // first-run popup when version changes
 void UI_RefreshAll();
 void UI_TrayInit();
 void UI_TrayRemove();

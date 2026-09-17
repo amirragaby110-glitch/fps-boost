@@ -40,7 +40,7 @@ static const StrRow kRows[] = {
 {SID_BTN_SAVE, "Save", "ذخیره"},
 {SID_BTN_CANCEL, "Cancel", "انصراف"},
 {SID_STATUS_READY, "Ready", "آماده"},
-{SID_VER, "Version 3.2.0", "نسخه 3.2.0"},
+{SID_VER, "Version 3.2.1", "نسخه 3.2.1"},
 
 {SID_DASH_TITLE, "Dashboard", "داشبورد"},
 {SID_DASH_SUB, "Your PC optimization status at a glance", "وضعیت بهینه‌سازی سیستم شما در یک نگاه"},
@@ -163,7 +163,7 @@ static const StrRow kRows[] = {
 {SID_SET_STARTUP, "Start with Windows", "اجرا همراه ویندوز"},
 {SID_SET_FOLDER, "Open data folder", "باز کردن پوشه داده‌ها"},
 {SID_SET_RESET, "Reset all settings", "بازنشانی همه تنظیمات"},
-{SID_SET_ABOUT, "FPS Booster Pro 3.2.0 - Ultimate Game FPS Optimizer", "FPS Booster Pro نسخه 3.2.0 - بهینه‌ساز نهایی اف‌پی‌اس بازی"},
+{SID_SET_ABOUT, "FPS Booster Pro 3.2.1 - Ultimate Game FPS Optimizer", "FPS Booster Pro نسخه 3.2.1 - بهینه‌ساز نهایی اف‌پی‌اس بازی"},
 {SID_SET_CONFIRM_RESET, "Reset all settings and revert all tweaks?", "همه تنظیمات بازنشانی و همه توییک‌ها برگردانده شود؟"},
 {SID_SET_RESTART_LANG, "Language will apply after restart.", "زبان بعد از اجرای مجدد اعمال می‌شود."},
 
@@ -286,6 +286,8 @@ static const StrRow kRows[] = {
 {SID_N_DNS_ADGUARD, "AdGuard (94.140.14.14)", "AdGuard (94.140.14.14)"},
 {SID_N_COPY, "Copy results", "کپی نتایج"},
 {SID_N_CANCELLED, "Cancelled", "لغو شد"},
+{SID_NEW_TITLE, "What's new", "چه چیز جدید است"},
+{SID_NEW_BODY, "From now on, every new version announces itself with this message.\n\n- Internet page: fixed speed test with live ping, download, upload and gaming grade\n- 7 one-click gaming DNS options, including Electro and AdGuard\n- Your version number is always visible at the bottom of the sidebar", "از این به بعد هر نسخه جدید با همین پیام خودش را معرفی می‌کند.\n\n- صفحه اینترنت: تست سرعت سالم با پینگ، دانلود و آپلود زنده و نمره گیمینگ\n- ۷ گزینه DNS گیمینگ با یک کلیک، از جمله الکترو و AdGuard\n- شماره نسخه همیشه پایین سایدبار دیده می‌شود"},
 
 };
 

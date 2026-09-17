@@ -31,6 +31,7 @@ Everything is **backed up and reversible**, with an automatic **restore point** 
 - 🌐 **v1.7 online AI + MAXIMUM**: keyless online AI answers (auto offline/online routing), 5 new max tweaks (Nagle, responsiveness, VBS...), MAX mode boosts foreground game + trims RAM
 - 🧹 **v3.1 AI removed**: the AI Advisor page was removed — no free keyless AI backend works reliably (all need keys, accounts, or are sanctioned), so instead of a broken button the app now ships 10 pages where every feature genuinely works
 - 🌐 **v3.2 Internet rebuilt**: speed test fixed and rewritten (live ping/download/upload + gaming grade + public IP that actually works), 7 one-click gaming DNS options (new: Electro 🇮🇷 + AdGuard), ping-all comparison across all 7, one-click Copy-results button
+- 🔔 **v3.2.1 update announcer**: every new version now shows a "What's new" popup on first run, so updates are impossible to miss
 - 🌗 **v2.1 any-program performance**: RAM Lock (up to MAX, guaranteed) for any process, pin any running program to library, per-game resolution (auto-restore), .lnk shortcuts, process context menu + auto-refresh, smarter AI (PC-aware, remembers chat, 6 new offline topics)
 - **v2.0 official UI**: live Dark/Light/Auto theme + 4 accent colors, brand-new gradient-glow background, quick theme button, global Ctrl+Alt+B boost hotkey, one-click update checker, instant language switch (auto-restart)
 - 🎨 **v1.7.1 UI polish**: fully dark lists/progress bars/combos/checkboxes (no more white patches), neon Undo button, RTL text in Persian mode

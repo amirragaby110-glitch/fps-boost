@@ -1,0 +1,34 @@
+// FPS Booster Pro Setup - resources for MSVC/MinGW builds (configured by CMake)
+// Icon ID 1: matches MAKEINTRESOURCEW(1) in src/setup.cpp
+#include <windows.h>
+
+1 ICON "@ASSETS_DIR@/icon.ico"
+1 RT_MANIFEST "@RES_DIR@/setup.manifest"
+
+1 VERSIONINFO
+FILEVERSION 1,4,0,0
+PRODUCTVERSION 1,4,0,0
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS 0x40004L
+FILETYPE 0x1L
+FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName", "FPS Booster"
+            VALUE "FileDescription", "FPS Booster Pro Setup"
+            VALUE "FileVersion", "1.4.0"
+            VALUE "InternalName", "FPSBooster-Setup"
+            VALUE "OriginalFilename", "FPSBooster-Setup.exe"
+            VALUE "ProductName", "FPS Booster Pro"
+            VALUE "ProductVersion", "1.4.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

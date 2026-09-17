@@ -1,0 +1,38 @@
+// FPS Booster Pro - resources for MSVC/MinGW builds (configured by CMake)
+// IDs must match src/app.h (RES_ICON_APP=101, RES_PNG_LOGO=201, RES_PNG_BANNER=202, RES_DB_GAMES=301)
+#include <windows.h>
+
+101 ICON "@ASSETS_DIR@/icon.ico"
+1 RT_MANIFEST "@RES_DIR@/app.manifest"
+
+1 VERSIONINFO
+FILEVERSION 1,4,0,0
+PRODUCTVERSION 1,4,0,0
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS 0x40004L
+FILETYPE 0x1L
+FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName", "FPS Booster"
+            VALUE "FileDescription", "FPS Booster Pro - Ultimate Game FPS Optimizer"
+            VALUE "FileVersion", "1.4.0"
+            VALUE "InternalName", "fpsbooster"
+            VALUE "OriginalFilename", "fpsbooster.exe"
+            VALUE "ProductName", "FPS Booster Pro"
+            VALUE "ProductVersion", "1.4.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+
+201 PNG "@ASSETS_DIR@/logo_ui.png"
+202 PNG "@ASSETS_DIR@/banner_ui.png"
+301 RCDATA "@DATA_DIR@/games_db.json"

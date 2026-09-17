@@ -88,6 +88,16 @@ bash tests/run.sh       # parser unit tests (Linux)
 Pipeline: `Zig C++ → PE resource injection (icon/manifest/version/images/DB)
 → GUI subsystem → validation → pad to 100 MB → portable zip`.
 
+## Build with Visual Studio (MSVC)
+The app is 100% C++ and also builds with Microsoft's compiler:
+1. Install Visual Studio 2022 (Desktop development with C++) + CMake.
+2. `cmake -B build-vs -G "Visual Studio 17 2022" -A x64`
+3. `cmake --build build-vs --config Release`
+4. Output: `build-vs\Release\fpsbooster.exe` (icon, manifest, images and game DB embedded).
+5. Setup: build target `FPSBooster-Setup`, then pack it with the payload:
+   `python tools/pack_setup.py build-vs\Release\FPSBooster-Setup.exe build-vs\Release\fpsbooster.exe FPSBooster-Setup.exe`
+   (result is exactly 100 MB, same as the official setup).
+
 ## Project layout
 
 ```
@@ -156,6 +166,15 @@ MIT — see [LICENSE](LICENSE).
 
 حجم فایل عمداً دقیقاً ۱۰۰ مگابایت است (بخش اضافه در انتهای فایل که لودر ویندوز
 نادیده می‌گیرد — هیچ اثری روی سرعت یا مصرف رم ندارد).
+
+## ساخت با ویژوال استودیو (MSVC)
+برنامه ۱۰۰٪ ++C است و با کامپایلر مایکروسافت هم ساخته می‌شود:
+1. ویژوال استودیو ۲۰۲۲ (بخش Desktop C++) و CMake را نصب کن.
+2. `cmake -B build-vs -G "Visual Studio 17 2022" -A x64`
+3. `cmake --build build-vs --config Release`
+4. خروجی: `build-vs\Release\fpsbooster.exe`
+5. برای Setup: تارگت `FPSBooster-Setup` را بیلد کن بعد:
+   `python tools/pack_setup.py build-vs\Release\FPSBooster-Setup.exe build-vs\Release\fpsbooster.exe FPSBooster-Setup.exe`
 
 ## امنیت
 

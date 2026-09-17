@@ -10,7 +10,12 @@
 #include <stdio.h>
 #include <string>
 #include <vector>
+#if __has_include("setup_license.h")
 #include "setup_license.h"
+#else
+// Fallback for MSVC/CMake builds without the generated header
+static const char* kSetupLicenseUtf8 = "FPS Booster Pro (MIT License)\r\n(c) 2026 FPS Booster\r\n\r\nFree to use. Provided as-is, without warranty.";
+#endif
 
 static const wchar_t* kAppName = L"FPS Booster Pro";
 static const wchar_t* kVer = L"1.4.0";

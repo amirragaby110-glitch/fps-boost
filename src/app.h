@@ -1,7 +1,7 @@
 // FPS Booster Pro - Shared header
 #pragma once
 
-#define APP_VER L"2.0.0"
+#define APP_VER L"2.1.0"
 #define HOTKEY_BOOST_ID 1
 
 #define UNICODE
@@ -26,7 +26,7 @@
 #include "strings.h"
 
 // ---------- App constants ----------
-#define APP_VERSION       L"1.0.0"
+#define APP_VERSION       L"2.1.0"
 #define APP_MUTEX         L"Global\\FPSBoosterPro_Mutex_v1"
 #define RES_ICON_APP      101
 #define RES_PNG_LOGO      201
@@ -69,7 +69,7 @@ enum CtrlId {
     IDC_G_PRIO, IDC_G_AFF, IDC_G_GPUPREF, IDC_G_FSO,
     IDC_G_ARGS, IDC_G_TIMER, IDC_G_POWER, IDC_G_KILL,
     IDC_G_LAUNCH, IDC_G_STATUS, IDC_G_TIP,
-    IDC_G_AUTO = 415, IDC_G_AUTOST,
+    IDC_G_AUTO = 415, IDC_G_AUTOST, IDC_G_RESCHK = 417, IDC_G_RES,
     // boost
     IDC_B_START = 500, IDC_B_UNDO, IDC_B_PROG, IDC_B_LOG, IDC_B_MAX,
     // tweaks
@@ -98,6 +98,7 @@ enum CtrlId {
     IDC_A_INPUT = 1200, IDC_A_ASK, IDC_A_OUT, IDC_A_Q1, IDC_A_Q2, IDC_A_Q3, IDC_A_STATUS, IDC_A_ONLINE,
     // live processes page
     IDC_R_LIST = 1300, IDC_R_BOOST, IDC_R_RAM, IDC_R_RESTORE, IDC_R_REFRESH, IDC_R_STATUS,
+    IDC_R_LOCK, IDC_R_RAMMB, IDC_R_ADD, IDC_R_KILL,
     // tray menu
     IDM_TRAY_OPEN = 2000, IDM_TRAY_BOOST, IDM_TRAY_EXIT,
 };
@@ -124,8 +125,9 @@ struct GameProfile {
     std::wstring killList; // ; separated exe names
     int  playCount;
     std::wstring lastPlayed;
+    int  resW, resh;      // per-game resolution (0 = keep current)
     GameProfile() : priority(2), affinity(0), gpuPref(1), disableFSO(false),
-        timerBoost(true), powerBoost(true), playCount(0) {}
+        timerBoost(true), powerBoost(true), playCount(0), resW(0), resh(0) {}
 };
 
 struct Tweak {
@@ -367,7 +369,7 @@ bool AutoBoostWatching();
 // ---------- ai.cpp ----------
 std::wstring Ai_Answer(const std::wstring& q); // offline advisor, EN/FA by UI lang
 bool Ai_NeedsOnline(const std::wstring& q); // true when the online model answers better
-void AiOnline_AskAsync(HWND w, const std::wstring& q); // threaded HTTPS, posts WM_APP_AI
+bool AiOnline_AskAsync(HWND w, const std::wstring& q); // threaded HTTPS, posts WM_APP_AI; false if busy
 bool AiOnline_TakeResult(std::wstring& a); // call on WM_APP_AI
 
 // ---------- procboost.cpp ----------
@@ -383,6 +385,8 @@ void Proc_Enum(std::vector<ProcInfo>& out);
 bool Proc_Boost(DWORD pid, std::wstring& msg);
 bool Proc_RamFocus(DWORD pid, std::wstring& msg);
 bool Proc_Restore(DWORD pid);
+bool Proc_RamLock(DWORD pid, int mb, std::wstring& msg); // mb<=0 = MAX
+bool Proc_ImagePath(DWORD pid, std::wstring& path);
 int  Proc_TrimAll(); // EmptyWorkingSet on all user processes, returns count
 
 // ---------- ui.cpp ----------

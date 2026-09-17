@@ -406,6 +406,7 @@ static HWND hDashInfo1, hDashInfo2, hDashTip;
 static HWND hDashPic;
 static HWND hGamesList, hGamesPrio, hGamesAff, hGamesGpu, hGamesFso, hGamesArgs,
             hGamesTimer, hGamesPower, hGamesKill, hGamesStatus, hGamesTip, hGamesLaunch;
+static HWND hGamesResChk = NULL, hGamesRes = NULL;
 static int g_gameSel = -1;
 static bool g_gamesLoading = false;
 static HWND hBoostLog, hBoostProg, hBoostStart, hBoostUndo, hBoostMax;
@@ -413,7 +414,12 @@ static HWND hTweakList, hTweakDetail, hTweakApply, hTweakRevert, hTweakAll, hTwe
 static HWND hSysCpu, hSysRam, hSysUp, hSysTimer, hSysGraph;
 static HWND hHelpText;
 static HWND hAiInput, hAiAsk, hAiQ1, hAiQ2, hAiQ3, hAiHint, hAiOut, hAiStatus, hAiOnline;
-static HWND hProcList, hProcHint, hProcStatus;
+static HWND hProcList, hProcHint, hProcStatus, hProcMB = NULL;
+static int ProcLockMB() {
+    int s = hProcMB ? (int)SendMessageW(hProcMB, CB_GETCURSEL, 0, 0) : 4;
+    static int mb[] = {512, 1024, 2048, 4096, 0};
+    return (s >= 0 && s < 5) ? mb[s] : 0;
+}
 static HWND hSetLang, hSetTray, hSetStartup;
 static HWND hSetStList = NULL;
 static int g_cpuHist[90], g_ramHist[90], g_histN = 0;
@@ -507,6 +513,12 @@ static void GamesFillList() {
         SetWindowTextW(hGamesArgs, g.args.c_str());
         SetChecked(hGamesTimer, g.timerBoost);
         SetChecked(hGamesPower, g.powerBoost);
+        SetChecked(hGamesResChk, g.resW > 0 && g.resh > 0);
+        int rsel = 0;
+        if (g.resW == 1280 && g.resh == 720) rsel = 1;
+        else if (g.resW == 1600 && g.resh == 900) rsel = 2;
+        else if (g.resW == 1920 && g.resh == 1080) rsel = 3;
+        SendMessageW(hGamesRes, CB_SETCURSEL, rsel, 0);
         SetWindowTextW(hGamesKill, g.killList.c_str());
         std::wstring tip = Games_TipFor(g.path);
         if (!tip.empty()) SetLabel(hGamesTip, WFormat(L"%s %s", T(SID_G_TIP_TITLE), tip.c_str()), LR_YELLOW);
@@ -532,6 +544,12 @@ static void GamesStorePanel() {
     GetWindowTextW(hGamesArgs, b, 1024); g.args = b;
     g.timerBoost = IsChecked(hGamesTimer);
     g.powerBoost = IsChecked(hGamesPower);
+    static int rw[] = {0, 1280, 1600, 1920};
+    static int rh[] = {0, 720, 900, 1080};
+    int rs = (int)SendMessageW(hGamesRes, CB_GETCURSEL, 0, 0);
+    if (rs < 0 || rs > 3) rs = 0;
+    if (!IsChecked(hGamesResChk)) rs = 0;
+    g.resW = rw[rs]; g.resh = rh[rs];
     GetWindowTextW(hGamesKill, b, 1024); g.killList = b;
     GameProfile snap = g;
     Games_Unlock();
@@ -568,6 +586,13 @@ static void BuildGames(HWND p) {
     HWND l4 = MkLabel(p, 400, 376, 480, 24); SetWindowTextW(l4, T(SID_G_KILL));
     hGamesKill = MkEdit(p, IDC_G_KILL, 400, 400, 492, 28);
     HWND hint = MkLabel(p, 400, 430, 480, 24); SetLabel(hint, T(SID_G_KILL_HINT), LR_MUTED);
+    hGamesResChk = MkCheck(p, IDC_G_RESCHK, 400, 458, 250, SID_G_RESCHK);
+    hGamesRes = MkCombo(p, IDC_G_RES, 660, 456, 232);
+    SendMessageW(hGamesRes, CB_ADDSTRING, 0, (LPARAM)T(SID_G_RESKEEP));
+    SendMessageW(hGamesRes, CB_ADDSTRING, 0, (LPARAM)L"1280x720");
+    SendMessageW(hGamesRes, CB_ADDSTRING, 0, (LPARAM)L"1600x900");
+    SendMessageW(hGamesRes, CB_ADDSTRING, 0, (LPARAM)L"1920x1080");
+    SendMessageW(hGamesRes, CB_SETCURSEL, 0, 0);
     hGamesLaunch = MkCTA(p, IDC_G_LAUNCH, 0, 506, 300, 54, SID_G_LAUNCH);
     hGamesStatus = MkLabel(p, 320, 512, 572, 26, g_hFontBig);
     hGamesTip = MkLabel(p, 320, 540, 572, 40);
@@ -812,14 +837,6 @@ static void BuildHelp(HWND p) {
 }
 
 // ---------- Settings ----------
-static void UI_SetLanguage(int lang) {
-    if (lang != 0 && lang != 1) return;
-    if (lang == Strings_GetLang()) return;
-    Strings_SetLang(lang);
-    Settings_Save();
-    SetStartupRun(IsChecked(hSetStartup));
-    MessageBoxW(g_hMain, T(SID_SET_RESTART_LANG), T(SID_APP_NAME), MB_OK | MB_ICONINFORMATION);
-}
 static std::vector<StartupItem> g_stItems;
 static void StartupFillList() {
     if (!hSetStList) return;
@@ -1007,10 +1024,14 @@ static void AiAsk() {
     std::wstring qq = q + a;
     SetWindowTextW(hAiInput, L"");
     if (g_aiOnline && Ai_NeedsOnline(qq)) {
+        if (!AiOnline_AskAsync(g_hMain, qq)) {
+            SetLabel(hAiStatus, T(SID_A_THINK), LR_YELLOW);
+            SetWindowTextW(hAiInput, qq.c_str());
+            return;
+        }
         AiAppendBlock(WFormat(L"%s: %s\r\n", T(SID_A_YOU), qq.c_str()));
         g_aiPending = qq;
         SetLabel(hAiStatus, T(SID_A_THINK), LR_ACCENT);
-        AiOnline_AskAsync(g_hMain, qq);
     } else {
         std::wstring ans = Ai_Answer(qq);
         AiAppendBlock(WFormat(L"%s: %s\r\n%s\r\n\r\n", T(SID_A_YOU), qq.c_str(), ans.c_str()));
@@ -1052,6 +1073,7 @@ static DWORD ProcSelectedPid() {
 }
 static void ProcFillList() {
     if (!hProcList) return;
+    DWORD keepPid = ProcSelectedPid();
     ListView_DeleteAllItems(hProcList);
     std::vector<ProcInfo> v;
     Proc_Enum(v);
@@ -1064,6 +1086,15 @@ static void ProcFillList() {
         LVSet(hProcList, row, 3, v[i].isGame ? L"\U0001F3AE" : L"");
         LVSetData(hProcList, row, (LPARAM)v[i].pid);
     }
+    if (keepPid) {
+        int n = ListView_GetItemCount(hProcList);
+        for (int i = 0; i < n; i++)
+            if ((DWORD)LVGetData(hProcList, i) == keepPid) {
+                ListView_SetItemState(hProcList, i, LVIS_SELECTED, LVIS_SELECTED);
+                ListView_EnsureVisible(hProcList, i, FALSE);
+                break;
+            }
+    }
 }
 static void BuildProc(HWND p) {
     hProcList = MkList(p, IDC_R_LIST, 0, 0, 860, 440);
@@ -1072,10 +1103,19 @@ static void BuildProc(HWND p) {
     LVCols(hProcList, ids, ww, 4);
     hProcHint = MkLabel(p, 0, 448, 860, 22);
     SetLabel(hProcHint, T(SID_R_HINT), LR_MUTED);
-    MkButton(p, IDC_R_BOOST, 0, 476, 200, 34, SID_R_BOOST);
-    MkButton(p, IDC_R_RAM, 210, 476, 200, 34, SID_R_RAMFOCUS);
-    MkButton(p, IDC_R_RESTORE, 420, 476, 200, 34, SID_R_RESTORE);
-    MkButton(p, IDC_R_REFRESH, 630, 476, 170, 34, SID_BTN_REFRESH);
+    MkButton(p, IDC_R_BOOST, 0, 476, 130, 34, SID_R_BOOST);
+    MkButton(p, IDC_R_RAM, 140, 476, 130, 34, SID_R_RAMFOCUS);
+    MkButton(p, IDC_R_LOCK, 280, 476, 110, 34, SID_R_LOCK);
+    hProcMB = MkCombo(p, IDC_R_RAMMB, 400, 476, 100);
+    SendMessageW(hProcMB, CB_ADDSTRING, 0, (LPARAM)L"512 MB");
+    SendMessageW(hProcMB, CB_ADDSTRING, 0, (LPARAM)L"1 GB");
+    SendMessageW(hProcMB, CB_ADDSTRING, 0, (LPARAM)L"2 GB");
+    SendMessageW(hProcMB, CB_ADDSTRING, 0, (LPARAM)L"4 GB");
+    SendMessageW(hProcMB, CB_ADDSTRING, 0, (LPARAM)T(SID_R_MAXMB));
+    SendMessageW(hProcMB, CB_SETCURSEL, 4, 0);
+    MkButton(p, IDC_R_ADD, 510, 476, 120, 34, SID_R_ADD);
+    MkButton(p, IDC_R_RESTORE, 640, 476, 110, 34, SID_R_RESTORE);
+    MkButton(p, IDC_R_REFRESH, 760, 476, 100, 34, SID_BTN_REFRESH);
     hProcStatus = MkLabel(p, 0, 518, 860, 24);
     SetLabel(hProcStatus, T(SID_STATUS_READY), LR_MUTED);
 }
@@ -1490,7 +1530,7 @@ static void DoAddGame() {
     of.lStructSize = sizeof(of);
     of.hwndOwner = g_hMain;
     std::wstring filt = T(SID_G_EXE_FILTER);
-    filt.push_back(0); filt += L"*.exe"; filt.push_back(0); filt.push_back(0);
+    filt.push_back(0); filt += L"*.exe;*.lnk"; filt.push_back(0); filt.push_back(0);
     std::vector<wchar_t> fb(filt.begin(), filt.end());
     of.lpstrFilter = fb.data();
     of.lpstrFile = file;
@@ -1516,7 +1556,8 @@ static void SetLangAndAsk(int lang) {
     if (g_mutex) { ReleaseMutex(g_mutex); CloseHandle(g_mutex); g_mutex = NULL; }
     wchar_t exe[MAX_PATH];
     GetModuleFileNameW(NULL, exe, MAX_PATH);
-    HINSTANCE rr = ShellExecuteW(NULL, L"open", exe, NULL, NULL, SW_SHOWNORMAL);
+    LPCWSTR rargs = IsWindowVisible(g_hMain) ? NULL : L"/min";
+    HINSTANCE rr = ShellExecuteW(NULL, L"open", exe, rargs, NULL, SW_SHOWNORMAL);
     if ((INT_PTR)rr <= 32) {
         g_mutex = CreateMutexW(NULL, TRUE, APP_MUTEX); // relaunch failed: stay running
     } else {
@@ -1663,6 +1704,7 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             break;
         case IDC_G_PRIO:
         case IDC_G_AFF:
+        case IDC_G_RES:
             if (code == CBN_SELCHANGE) GamesStorePanel();
             break;
         case IDC_G_ARGS:
@@ -1682,7 +1724,7 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
                 else SetLabel(hGamesAutoSt, L"", LR_MUTED);
             }
             break;
-        case IDC_G_GPUPREF: case IDC_G_FSO: case IDC_G_TIMER: case IDC_G_POWER:
+        case IDC_G_GPUPREF: case IDC_G_FSO: case IDC_G_TIMER: case IDC_G_POWER: case IDC_G_RESCHK:
             if (code == BN_CLICKED) {
                 HWND b = (HWND)l;
                 SetChecked(b, !IsChecked(b)); // manual toggle (owner-draw)
@@ -1705,6 +1747,33 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         case IDC_A_Q1: SetWindowTextW(hAiInput, T(SID_A_Q1)); AiAsk(); break;
         case IDC_A_Q2: SetWindowTextW(hAiInput, T(SID_A_Q2)); AiAsk(); break;
         case IDC_A_Q3: SetWindowTextW(hAiInput, T(SID_A_Q3)); AiAsk(); break;
+        case IDC_R_LOCK: {
+            DWORD pid = ProcSelectedPid();
+            if (!pid) { SetLabel(hProcStatus, T(SID_R_HINT), LR_YELLOW); break; }
+            std::wstring m; bool ok = Proc_RamLock(pid, ProcLockMB(), m);
+            SetLabel(hProcStatus, m, ok ? LR_GREEN : LR_RED);
+            ProcFillList();
+            break;
+        }
+        case IDC_R_ADD: {
+            DWORD pid = ProcSelectedPid();
+            if (!pid) { SetLabel(hProcStatus, T(SID_R_HINT), LR_YELLOW); break; }
+            std::wstring path;
+            if (Proc_ImagePath(pid, path) && Games_Add(path))
+                SetLabel(hProcStatus, WFormat(L"%s - %s", T(SID_G_ADDED), BaseName(path).c_str()), LR_GREEN);
+            else SetLabel(hProcStatus, T(SID_B_FAIL), LR_RED);
+            break;
+        }
+        case IDC_R_KILL: {
+            DWORD pid = ProcSelectedPid();
+            if (!pid || pid == GetCurrentProcessId()) break;
+            if (MessageBoxW(h, T(SID_R_KILLCF), T(SID_APP_NAME), MB_YESNO | MB_ICONWARNING) == IDYES) {
+                HANDLE kh = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+                if (kh) { TerminateProcess(kh, 1); CloseHandle(kh); }
+                ProcFillList();
+            }
+            break;
+        }
         case IDC_R_REFRESH: ProcFillList(); break;
         case IDC_R_BOOST: {
             DWORD pid = ProcSelectedPid();
@@ -2019,6 +2088,34 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     case WM_NOTIFY: {
         LPNMHDR hdr = (LPNMHDR)l;
         if (!hdr) break;
+        if (hdr->idFrom == IDC_R_LIST && hdr->code == NM_DBLCLK) {
+            DWORD pid = ProcSelectedPid();
+            if (pid) {
+                std::wstring m; bool ok = Proc_Boost(pid, m);
+                SetLabel(hProcStatus, m, ok ? LR_GREEN : LR_RED);
+                ProcFillList();
+            }
+            break;
+        }
+        if (hdr->idFrom == IDC_R_LIST && hdr->code == NM_RCLICK) {
+            if (ProcSelectedPid()) {
+                POINT pt; GetCursorPos(&pt);
+                HMENU m = CreatePopupMenu();
+                AppendMenuW(m, MF_STRING, IDC_R_BOOST, T(SID_R_BOOST));
+                AppendMenuW(m, MF_STRING, IDC_R_RAM, T(SID_R_RAMFOCUS));
+                AppendMenuW(m, MF_STRING, IDC_R_LOCK, T(SID_R_LOCK));
+                AppendMenuW(m, MF_SEPARATOR, 0, NULL);
+                AppendMenuW(m, MF_STRING, IDC_R_ADD, T(SID_R_ADD));
+                AppendMenuW(m, MF_STRING, IDC_R_RESTORE, T(SID_R_RESTORE));
+                AppendMenuW(m, MF_STRING, IDC_R_KILL, T(SID_R_KILL));
+                AppendMenuW(m, MF_SEPARATOR, 0, NULL);
+                AppendMenuW(m, MF_STRING, IDC_R_REFRESH, T(SID_BTN_REFRESH));
+                SetForegroundWindow(h);
+                TrackPopupMenu(m, TPM_LEFTALIGN, pt.x, pt.y, 0, h, NULL);
+                DestroyMenu(m);
+            }
+            break;
+        }
         if (hdr->code == LVN_ITEMCHANGED) {
             LPNMLISTVIEW lv = (LPNMLISTVIEW)l;
             if (hdr->idFrom == IDC_G_LIST && lv->uNewState & LVIS_SELECTED) {
@@ -2212,7 +2309,13 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             Theme_ApplyAll();
         break;
     case WM_TIMER:
-        if (w == 1 && g_page == PAGE_SYSTEM) SysRefresh();
+        if (w == 1) {
+            if (g_page == PAGE_SYSTEM) SysRefresh();
+            else if (g_page == PAGE_PROC) {
+                static int tick = 0;
+                if (++tick >= 3) { tick = 0; ProcFillList(); }
+            }
+        }
         break;
     case WM_SIZE: {
         int W = LOWORD(l), H = HIWORD(l);
@@ -2243,10 +2346,13 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         MoveWindow(hAiStatus, 0, ph - S(26), pw, S(24), TRUE);
         MoveWindow(hProcList, 0, 0, pw, ph - S(150), TRUE);
         MoveWindow(hProcHint, 0, ph - S(142), pw, S(22), TRUE);
-        MoveWindow(GetDlgItem(g_hPages[PAGE_PROC], IDC_R_BOOST), 0, ph - S(112), S(200), S(34), TRUE);
-        MoveWindow(GetDlgItem(g_hPages[PAGE_PROC], IDC_R_RAM), S(210), ph - S(112), S(200), S(34), TRUE);
-        MoveWindow(GetDlgItem(g_hPages[PAGE_PROC], IDC_R_RESTORE), S(420), ph - S(112), S(200), S(34), TRUE);
-        MoveWindow(GetDlgItem(g_hPages[PAGE_PROC], IDC_R_REFRESH), S(630), ph - S(112), S(170), S(34), TRUE);
+        MoveWindow(GetDlgItem(g_hPages[PAGE_PROC], IDC_R_BOOST), 0, ph - S(112), S(130), S(34), TRUE);
+        MoveWindow(GetDlgItem(g_hPages[PAGE_PROC], IDC_R_RAM), S(140), ph - S(112), S(130), S(34), TRUE);
+        MoveWindow(GetDlgItem(g_hPages[PAGE_PROC], IDC_R_LOCK), S(280), ph - S(112), S(110), S(34), TRUE);
+        MoveWindow(hProcMB, S(400), ph - S(112), S(100), S(34), TRUE);
+        MoveWindow(GetDlgItem(g_hPages[PAGE_PROC], IDC_R_ADD), S(510), ph - S(112), S(120), S(34), TRUE);
+        MoveWindow(GetDlgItem(g_hPages[PAGE_PROC], IDC_R_RESTORE), S(640), ph - S(112), S(110), S(34), TRUE);
+        MoveWindow(GetDlgItem(g_hPages[PAGE_PROC], IDC_R_REFRESH), S(760), ph - S(112), S(100), S(34), TRUE);
         MoveWindow(hProcStatus, 0, ph - S(70), pw, S(24), TRUE);
         MoveWindow(hBoostProg, 0, S(114), pw, S(26), TRUE);
         MoveWindow(hBoostLog, 0, S(152), pw, ph - S(152) - S(8), TRUE);

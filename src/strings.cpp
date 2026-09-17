@@ -40,7 +40,7 @@ static const StrRow kRows[] = {
 {SID_BTN_SAVE, "Save", "ذخیره"},
 {SID_BTN_CANCEL, "Cancel", "انصراف"},
 {SID_STATUS_READY, "Ready", "آماده"},
-{SID_VER, "Version 2.0.0", "نسخه 2.0.0"},
+{SID_VER, "Version 2.1.0", "نسخه 2.1.0"},
 
 {SID_DASH_TITLE, "Dashboard", "داشبورد"},
 {SID_DASH_SUB, "Your PC optimization status at a glance", "وضعیت بهینه‌سازی سیستم شما در یک نگاه"},
@@ -163,7 +163,7 @@ static const StrRow kRows[] = {
 {SID_SET_STARTUP, "Start with Windows", "اجرا همراه ویندوز"},
 {SID_SET_FOLDER, "Open data folder", "باز کردن پوشه داده‌ها"},
 {SID_SET_RESET, "Reset all settings", "بازنشانی همه تنظیمات"},
-{SID_SET_ABOUT, "FPS Booster Pro 2.0.0 - Ultimate Game FPS Optimizer", "FPS Booster Pro نسخه 2.0.0 - بهینه‌ساز نهایی اف‌پی‌اس بازی"},
+{SID_SET_ABOUT, "FPS Booster Pro 2.1.0 - Ultimate Game FPS Optimizer", "FPS Booster Pro نسخه 2.1.0 - بهینه‌ساز نهایی اف‌پی‌اس بازی"},
 {SID_SET_CONFIRM_RESET, "Reset all settings and revert all tweaks?", "همه تنظیمات بازنشانی و همه توییک‌ها برگردانده شود؟"},
 {SID_SET_RESTART_LANG, "Language will apply after restart.", "زبان بعد از اجرای مجدد اعمال می‌شود."},
 
@@ -286,6 +286,14 @@ static const StrRow kRows[] = {
 {SID_UPD_LATEST, "You have the latest version (%s).", "آخرین نسخه را داری (%s)."},
 {SID_UPD_NEW, "New version %s is available! Get it from GitHub Releases.", "نسخه جدید %s منتشر شد! از صفحه Releases در گیت‌هاب بگیر."},
 {SID_UPD_FAIL, "Could not check for updates. Check your internet connection.", "بررسی آپدیت ممکن نشد. اینترنت را چک کن."},
+
+{SID_R_LOCK, "Lock RAM", "قفل رم"},
+{SID_R_MAXMB, "MAX", "حداکثر"},
+{SID_R_ADD, "+ Library", "+ کتابخانه"},
+{SID_R_KILL, "Kill process", "بستن پردازش"},
+{SID_R_KILLCF, "Terminate this process? Unsaved work in it will be lost.", "این پردازش بسته شود؟ کارهای ذخیره‌نشده‌اش از بین می‌رود."},
+{SID_G_RESCHK, "Lower resolution while playing", "رزولوشن پایین‌تر هنگام بازی"},
+{SID_G_RESKEEP, "Keep current", "بدون تغییر"},
 
 };
 

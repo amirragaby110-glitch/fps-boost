@@ -3,6 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <wctype.h>
+#include <shobjidl.h>
 
 // ================= Storage =================
 static std::vector<GameProfile> g_games;
@@ -34,6 +35,8 @@ void Games_Load() {
         g.killList = e.wstr("kill");
         g.playCount = e.num("plays", 0);
         g.lastPlayed = e.wstr("last");
+        g.resW = e.num("resw", 0);
+        g.resh = e.num("resh", 0);
         if (!g.path.empty()) g_games.push_back(g);
     }
     GUnlock();
@@ -44,9 +47,9 @@ void Games_Save() {
     for (size_t i = 0; i < g_games.size(); i++) {
         const GameProfile& g = g_games[i];
         if (i) j += ",";
-        char nb[128];
-        snprintf(nb, 128, "{\"prio\":%d,\"aff\":%d,\"gpu\":%d,\"fso\":%d,\"timer\":%d,\"power\":%d,\"plays\":%d",
-            g.priority, g.affinity, g.gpuPref, g.disableFSO?1:0, g.timerBoost?1:0, g.powerBoost?1:0, g.playCount);
+        char nb[192];
+        snprintf(nb, 192, "{\"prio\":%d,\"aff\":%d,\"gpu\":%d,\"fso\":%d,\"timer\":%d,\"power\":%d,\"plays\":%d,\"resw\":%d,\"resh\":%d",
+            g.priority, g.affinity, g.gpuPref, g.disableFSO?1:0, g.timerBoost?1:0, g.powerBoost?1:0, g.playCount, g.resW, g.resh);
         j += nb;
         j += ",\"name\":\"" + JsonEscapeW(g.name) + "\",\"path\":\"" + JsonEscapeW(g.path) +
              "\",\"args\":\"" + JsonEscapeW(g.args) + "\",\"kill\":\"" + JsonEscapeW(g.killList) +
@@ -58,19 +61,46 @@ void Games_Save() {
 }
 std::vector<GameProfile>& Games_All() { return g_games; }
 
+// Resolve .lnk shortcuts so ANY program (not just raw .exe picks) can join the library.
+static bool ResolveShortcut(const std::wstring& lnk, std::wstring& target) {
+    target.clear();
+    IShellLinkW* sl = NULL;
+    if (FAILED(CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER,
+            IID_IShellLinkW, (void**)&sl)) || !sl) return false;
+    bool ok = false;
+    IPersistFile* pf = NULL;
+    if (SUCCEEDED(sl->QueryInterface(IID_IPersistFile, (void**)&pf)) && pf) {
+        if (SUCCEEDED(pf->Load(lnk.c_str(), STGM_READ))) {
+            wchar_t buf[MAX_PATH * 2]; buf[0] = 0;
+            WIN32_FIND_DATAW fd;
+            if (SUCCEEDED(sl->GetPath(buf, MAX_PATH * 2, &fd, 0)) && buf[0]) {
+                target = buf; ok = true;
+            }
+        }
+        pf->Release();
+    }
+    sl->Release();
+    return ok;
+}
+
 bool Games_Add(const std::wstring& exePath, const std::wstring& niceName) {
-    if (!FileExists(exePath)) return false;
-    std::wstring low = ToLower(exePath);
+    std::wstring target = exePath;
+    std::wstring low0 = ToLower(exePath);
+    if (low0.size() > 4 && low0.substr(low0.size() - 4) == L".lnk") {
+        if (!ResolveShortcut(exePath, target) || target.empty()) return false;
+    }
+    if (!FileExists(target)) return false;
+    std::wstring low = ToLower(target);
     GLock();
     for (size_t i = 0; i < g_games.size(); i++)
         if (ToLower(g_games[i].path) == low) { GUnlock(); return false; }
     GameProfile g;
-    g.path = exePath;
-    g.name = niceName.empty() ? BaseName(exePath) : niceName;
+    g.path = target;
+    g.name = niceName.empty() ? BaseName(target) : niceName;
     g_games.push_back(g);
     GUnlock();
     Games_Save();
-    LogW(L"Game added: %s", exePath.c_str());
+    LogW(L"Game added: %s", target.c_str());
     return true;
 }
 bool Games_Remove(int idx) {
@@ -360,6 +390,8 @@ void Games_Specs(std::vector<GameSpec>& out) {
 
 // ================= Boost & Launch =================
 static bool g_launchBusy = false;
+static int g_sessResW = 0, g_sessResH = 0;
+static bool g_sessRes = false;
 static ULONG g_sessTimerPrev = 0; static bool g_sessTimer = false;
 static GUID g_sessPower; static bool g_sessPowerSet = false;
 
@@ -404,6 +436,12 @@ static DWORD WINAPI LaunchThread(LPVOID arg) {
     PurgeStandbyList();
     ULONG prev = 0;
     if (g.timerBoost && TimerSetMin(&prev)) { g_sessTimerPrev = prev; g_sessTimer = true; }
+    if (g.resW > 0 && g.resh > 0) {
+        int cw = 0, ch = 0;
+        if (GetCurrentResolution(cw, ch)) { g_sessResW = cw; g_sessResH = ch; g_sessRes = true; }
+        SetDisplayResolution(g.resW, g.resh);
+        LogW(L"Session resolution: %dx%d", g.resW, g.resh);
+    }
 
     // launch
     std::wstring dir = DirName(g.path);
@@ -474,4 +512,5 @@ void Games_BoostLaunch(int idx, HWND notifyWnd) {
 void Games_RestoreAfterSession() {
     if (g_sessTimer) { TimerRestore(g_sessTimerPrev); g_sessTimer = false; }
     if (g_sessPowerSet) { PowerSetActive(g_sessPower); g_sessPowerSet = false; }
+    if (g_sessRes) { SetDisplayResolution(g_sessResW, g_sessResH); g_sessRes = false; }
 }

@@ -544,14 +544,14 @@ static std::wstring AiHelp(bool fa) {
         L"\u2022 \"My specs?\" / \"RAM?\" / \"Ping?\" \u2014 PC answers\r\n"
         L"\u2022 \"How do I boost FPS?\" \u2014 step-by-step\r\n"
         L"\u2022 Anything else \u2014 online AI answers in seconds\r\n"
-        L"\r\nI speak English and Persian. I work offline, inside this app.";
+        L"\r\nYou can also ask about: resolution, RAM lock, processes, hotkey, themes, updates.\r\n\r\nI speak English and Persian. I work offline, inside this app.";
     return L"\U0001F916 من این کارها را بلدم:\r\n"
         L"\u2022 «GTA V اجرا میشه؟» \u2014 بررسی کامل سیستم\r\n"
         L"\u2022 «نکات فریم Rust» \u2014 بهترین تنظیمات هر بازی\r\n"
         L"\u2022 «مشخصات سیستم؟» / «رم؟» / «پینگ؟»\r\n"
         L"\u2022 «چطور اف‌پی‌اس را بالا ببرم؟» \u2014 قدم‌به‌قدم\r\n"
         L"\u2022 هر سوال دیگری \u2014 هوش آنلاین در چند ثانیه جواب می‌دهد\r\n"
-        L"\r\nفارسی و انگلیسی می‌فهمم و کاملاً آفلاین داخل همین برنامه کار می‌کنم.";
+        L"\r\nدرباره رزولوشن، قفل رم، پردازش‌ها، هات‌کی، تم و آپدیت هم بپرس.\r\n\r\nفارسی و انگلیسی می‌فهمم و کاملاً آفلاین داخل همین برنامه کار می‌کنم.";
 }
 
 static std::wstring AiThanks(bool fa) {
@@ -578,6 +578,55 @@ static std::wstring AiFallback(bool fa) {
         L"\u2022 \"Can I run GTA V?\"\r\n\u2022 \"FPS tips for Rust\"\r\n\u2022 \"My specs?\"\r\n\u2022 \"How do I boost FPS?\"";
     return L"\U0001F914 نفهمیدم چی گفتی. این‌ها را امتحان کن:\r\n"
         L"\u2022 «GTA V اجرا میشه؟»\r\n\u2022 «نکات فریم Rust»\r\n\u2022 «مشخصات سیستم؟»\r\n\u2022 «چطور اف‌پی‌اس را بالا ببرم؟»";
+}
+
+static std::wstring AiTheme(bool fa) {
+    if (!fa) return L"\U0001F316 Theme: Settings page \u2192 Theme = Dark / Light / Auto (follows Windows).\r\n"
+        L"\u2022 4 accent colors: Neon, Emerald, Sunset, Violet\r\n"
+        L"\u2022 Quick button (moon/sun) at the top toggles instantly, no restart.";
+    return L"\U0001F316 تم: صفحه تنظیمات \u2192 پوسته = تیره / روشن / خودکار (دنبال‌کننده ویندوز).\r\n"
+        L"\u2022 چهار رنگ اصلی: نئون، زمردی، غروب، بنفش\r\n"
+        L"\u2022 دکمه سریع ماه/خورشید بالا هم فوری عوض می‌کند، بدون ری‌استارت.";
+}
+static std::wstring AiHotkey(bool fa) {
+    if (!fa) return L"\u2328\uFE0F Global hotkey Ctrl+Alt+B boosts from anywhere in Windows.\r\n"
+        L"\u2022 It opens the app on the Boost page and starts the boost\r\n"
+        L"\u2022 Toggle it in Settings if another app uses the same keys.";
+    return L"\u2328\uFE0F هات‌کی سراسری Ctrl+Alt+B از هرجای ویندوز بوست می‌زند.\r\n"
+        L"\u2022 برنامه را روی صفحه بوست باز می‌کند و بوست را شروع می‌کند\r\n"
+        L"\u2022 اگر برنامه دیگری همین کلیدها را دارد، از تنظیمات خاموشش کن.";
+}
+static std::wstring AiUpdate(bool fa) {
+    if (!fa) return L"\U0001F504 Updates: Settings page \u2192 Check for updates.\r\n"
+        L"\u2022 Needs internet; compares your version with GitHub Releases\r\n"
+        L"\u2022 If a new version exists, download it from the Releases page.";
+    return L"\U0001F504 آپدیت: صفحه تنظیمات \u2192 بررسی آپدیت.\r\n"
+        L"\u2022 اینترنت لازم دارد؛ نسخه تو را با گیت‌هاب مقایسه می‌کند\r\n"
+        L"\u2022 اگر نسخه جدید باشد، از صفحه Releases دانلودش کن.";
+}
+static std::wstring AiRes(bool fa) {
+    if (!fa) return L"\U0001F5A5\uFE0F Resolution = free FPS: My Games \u2192 tick \u201CLower resolution\u201D \u2192 pick 720p/900p/1080p.\r\n"
+        L"\u2022 Game launches low (huge FPS gain), resolution auto-restores on exit\r\n"
+        L"\u2022 Upscalers (NIS / RSR / FSR / DLSS) render low then upscale: enable them in NVIDIA/AMD panel or in-game for sharp + fast image.";
+    return L"\U0001F5A5\uFE0F رزولوشن = اف‌پی‌اس مجانی: بازی‌های من \u2192 تیک \u201Cرزولوشن پایین‌تر\u201D \u2192 انتخاب 720p/900p/1080p.\r\n"
+        L"\u2022 بازی پایین اجرا می‌شود (اف‌پی‌اس خیلی بیشتر) و بعد از خروج رزولوشن خودکار برمی‌گردد\r\n"
+        L"\u2022 آپ‌اسکیلرها (NIS / RSR / FSR / DLSS) پایین رندر و بعد شارپ می‌کنند: از پنل انویدیا/ای‌ام‌دی یا داخل بازی روشنشان کن.";
+}
+static std::wstring AiProc(bool fa) {
+    if (!fa) return L"\U0001F4CA Live Processes page controls ANY running program:\r\n"
+        L"\u2022 Boost priority / RAM Focus / Lock RAM (up to MAX, guaranteed)\r\n"
+        L"\u2022 + Library pins any process as a game profile; right-click menu, double-click = boost, Kill for frozen apps.";
+    return L"\U0001F4CA صفحه پردازش‌های زنده، هر برنامه در حال اجرا را کنترل می‌کند:\r\n"
+        L"\u2022 بوست اولویت / تمرکز رم / قفل رم (تا حداکثر، تضمینی)\r\n"
+        L"\u2022 دکمه کتابخانه هر پردازش را پروفایل بازی می‌کند؛ راست‌کلیک منو دارد، دابل‌کلیک = بوست، بستن برای برنامه قفل‌کرده.";
+}
+static std::wstring AiLang(bool fa) {
+    if (!fa) return L"\U0001F310 Language: Settings page, or the EN button at the top.\r\n"
+        L"\u2022 The app relaunches itself in the new language (English / Persian)\r\n"
+        L"\u2022 Everything is translated: pages, AI, messages, even the guide.";
+    return L"\U0001F310 زبان: صفحه تنظیمات، یا دکمه EN/فا بالای پنجره.\r\n"
+        L"\u2022 برنامه خودش را با زبان جدید اجرا می‌کند (انگلیسی / فارسی)\r\n"
+        L"\u2022 همه‌چیز ترجمه شده: صفحه‌ها، هوش مصنوعی، پیام‌ها، حتی راهنما.";
 }
 
 // ---------- main entry ----------
@@ -627,6 +676,8 @@ std::wstring Ai_Answer(const std::wstring& q) {
     static const char* hwK[] = {"spec", "my pc", "my system", "my laptop", "cpu", "gpu", "processor", "مشخصات", "سیستم من", "پردازنده", "کارت", NULL};
     for (int i = 0; hwK[i]; i++)
         if (AiHasU8(low, hwK[i])) return AiSpecs(h, fa);
+    if (AiHasU8(low, "lock ram") || AiHasU8(low, "ram lock") || AiHasU8(low, "قفل رم") || AiHasU8(low, "اختصاص رم"))
+        return AiProc(fa);
     if (AiHasU8(low, "ram") || AiHasU8(low, "رم") || AiHasU8(low, "memory") || AiHasU8(low, "حافظه") || AiHasU8(low, "مموری"))
         return AiRam(h, fa);
     if (AiHasU8(low, "ping") || AiHasU8(low, "پینگ") || AiHasU8(low, "dns") || AiHasU8(low, "internet") ||
@@ -635,6 +686,24 @@ std::wstring Ai_Answer(const std::wstring& q) {
     if (AiHasU8(low, "boost") || AiHasU8(low, "بوست") || AiHasU8(low, "optimize") || AiHasU8(low, "بهینه") ||
         AiHasU8(low, "more fps") || AiHasU8(low, "فریم بیشتر"))
         return AiBoost(fa);
+    static const char* themeK[] = {"theme", "dark mode", "light mode", "accent", "پوسته", "حالت شب", "تم", "تیره", "روشن", "دارک", "لایت", NULL};
+    for (int i = 0; themeK[i]; i++)
+        if (AiHasU8(low, themeK[i])) return AiTheme(fa);
+    static const char* hotK[] = {"hotkey", "hot key", "ctrl", "میانبر", "هات", NULL};
+    for (int i = 0; hotK[i]; i++)
+        if (AiHasU8(low, hotK[i])) return AiHotkey(fa);
+    static const char* updK[] = {"update", "upgrade", "version", "آپدیت", "نسخه", NULL};
+    for (int i = 0; updK[i]; i++)
+        if (AiHasU8(low, updK[i])) return AiUpdate(fa);
+    static const char* resK[] = {"resolution", "resol", "720", "1080", "1440", "upscale", "dlss", "fsr", "nis", "rsr", "رزولوشن", "رزولیشن", "اسکیل", "کیفیت تصویر", NULL};
+    for (int i = 0; resK[i]; i++)
+        if (AiHasU8(low, resK[i])) return AiRes(fa);
+    static const char* procK[] = {"process", "lock ram", "ram lock", "قفل رم", "اختصاص رم", "پردازش", "task manager", "تسک", "kill", NULL};
+    for (int i = 0; procK[i]; i++)
+        if (AiHasU8(low, procK[i])) return AiProc(fa);
+    static const char* langK[] = {"language", "lang", "زبان", "فارسی", "english", "انگلیسی", NULL};
+    for (int i = 0; langK[i]; i++)
+        if (AiHasU8(low, langK[i])) return AiLang(fa);
     if (canRun || AiHas(low, L"?") || AiHas(low, L"game") || AiHasU8(low, "بازی"))
         return AiUnknown(alts, db, fa);
     return AiFallback(fa);
@@ -652,14 +721,26 @@ static std::string AiUrlEncode(const std::string& in) {
     }
     return o;
 }
+static std::wstring g_aiLastQ, g_aiLastA; // short conversation memory (online)
 static bool AiOnline_Fetch(const std::wstring& q, bool fa, std::wstring& answer) {
+    std::wstring specs = WFormat(fa ? L"مشخصات کاربر: %s؛ %s؛ %s؛ %s. " : L"User PC: %s; %s; %s; %s. ",
+        SysCpuName().c_str(), SysGpuName().c_str(), SysRamString().c_str(), SysOsString().c_str());
+    std::wstring mem;
+    if (!g_aiLastQ.empty())
+        mem = WFormat(fa ? L"گفتگوی قبلی: سوال «%s» / جواب «%s». " : L"Previous chat: Q: %s / A: %s. ",
+            g_aiLastQ.c_str(), g_aiLastA.c_str());
     std::wstring sys = fa ?
-        L"تو دستیار فارسی FPS Booster هستی. خیلی کوتاه (زیر ۱۲۰ کلمه) و کاربردی جواب بده. سوال: " :
-        L"You are the FPS Booster assistant. Answer briefly (under 120 words), practical. Question: ";
-    std::string path = "/" + AiUrlEncode(WideToUtf8(sys + q.substr(0, 400))) + "?model=openai";
+        L"تو دستیار فارسی FPS Booster هستی. خیلی کوتاه (زیر ۱۲۰ کلمه) و کاربردی جواب بده. " :
+        L"You are the FPS Booster assistant. Answer briefly (under 120 words), practical. ";
+    std::wstring full = sys + specs + mem + (fa ? L"سوال: " : L"Question: ") + q.substr(0, 160);
+    std::string path = "/" + AiUrlEncode(WideToUtf8(full)) + "?model=openai";
+    if (path.size() > 3800 && !mem.empty()) {
+        full = sys + specs + (fa ? L"سوال: " : L"Question: ") + q.substr(0, 160);
+        path = "/" + AiUrlEncode(WideToUtf8(full)) + "?model=openai";
+    }
     if (path.size() > 4000) return false;
     std::wstring wpath = Utf8ToWide(path);
-    HINTERNET ses = WinHttpOpen(L"FPSBooster/1.7", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+    HINTERNET ses = WinHttpOpen(L"FPSBooster/2.1", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
         WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!ses) return false;
     WinHttpSetTimeouts(ses, 8000, 8000, 10000, 25000);
@@ -709,6 +790,7 @@ static CRITICAL_SECTION g_aiCs;
 static bool g_aiCsInit = false;
 static std::wstring g_aiRes;
 static bool g_aiOk = false;
+static LONG g_aiBusy = 0;
 static DWORD WINAPI AiOnlineThread(LPVOID arg) {
     AiOnlineCtx* c = (AiOnlineCtx*)arg;
     std::wstring a;
@@ -720,20 +802,26 @@ static DWORD WINAPI AiOnlineThread(LPVOID arg) {
     HWND w = c->w;
     delete c;
     PostMessageW(w, WM_APP_AI, ok ? 1 : 0, 0);
+    InterlockedExchange(&g_aiBusy, 0);
     return 0;
 }
-void AiOnline_AskAsync(HWND w, const std::wstring& q) {
+bool AiOnline_AskAsync(HWND w, const std::wstring& q) {
+    if (InterlockedCompareExchange(&g_aiBusy, 1, 0) != 0) return false;
+    g_aiLastQ = q.substr(0, 80);
     AiOnlineCtx* c = new AiOnlineCtx;
     c->w = w; c->q = q; c->fa = Strings_GetLang() == 1;
     HANDLE h = CreateThread(NULL, 0, AiOnlineThread, c, 0, NULL);
-    if (h) CloseHandle(h);
-    else delete c;
+    if (h) { CloseHandle(h); return true; }
+    delete c;
+    InterlockedExchange(&g_aiBusy, 0);
+    return false;
 }
 bool AiOnline_TakeResult(std::wstring& a) {
     if (!g_aiCsInit) return false;
     EnterCriticalSection(&g_aiCs);
     a = g_aiRes;
     bool ok = g_aiOk;
+    if (ok) g_aiLastA = a.substr(0, 80);
     g_aiRes.clear();
     LeaveCriticalSection(&g_aiCs);
     return ok;
@@ -748,6 +836,15 @@ bool Ai_NeedsOnline(const std::wstring& q) {
     Games_Specs(db);
     std::vector<int> alts;
     if (AiFindGame(q, db, alts) >= 0) return false;
+    static const char* featK[] = {"dark mode", "light mode", "theme", "accent", "پوسته", "حالت شب",
+        "hotkey", "hot key", "ctrl+alt", "میانبر", "هات‌کی", "هاتکی", "هات کی",
+        "update", "upgrade", "version", "آپدیت", "نسخه",
+        "resolution", "resol", "720", "1080", "1440", "upscale", "dlss", "fsr", "nis", "rsr",
+        "رزولوشن", "رزولیشن", "اسکیل",
+        "processes", "process ", "lock ram", "قفل رم", "اختصاص رم", "پردازش", "task manager", "kill ",
+        "language", "lang", "زبان", "فارسی", "english", NULL};
+    for (int i = 0; featK[i]; i++)
+        if (AiHasU8(low, featK[i])) return false;
     bool canRun = AiHas(low, L"run") || AiHas(low, L"play") || AiHas(low, L"can ") || AiHas(low, L"will ") ||
         AiHas(low, L"work") || AiHas(low, L"handle");
     static const char* canRunFa[] = {"اجرا", "میاد", "می‌آید", "میکشه", "می‌کشه", "سیستم", "کامپیوتر",

@@ -18,7 +18,7 @@ static const char* kSetupLicenseUtf8 = "FPS Booster Pro (MIT License)\r\n(c) 202
 #endif
 
 static const wchar_t* kAppName = L"FPS Booster Pro";
-static const wchar_t* kVer = L"2.0.0";
+static const wchar_t* kVer = L"2.1.0";
 static const wchar_t* kExeName = L"fpsbooster.exe";
 static const wchar_t* kUnName = L"uninstall.exe";
 static const wchar_t* kRegUn = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\FPSBooster";

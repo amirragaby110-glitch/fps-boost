@@ -122,7 +122,7 @@ def pad_to_100mb(src, dst):
     print('padded: %d -> %d bytes (%.1f MB)' % (len(data), final, final / 1024 / 1024))
 
 
-SETUP_VER = '2.0.0'
+SETUP_VER = '2.1.0'
 
 def gen_setup_license():
     text = open(os.path.join(ROOT, 'LICENSE'), encoding='utf-8').read().strip()
@@ -198,7 +198,7 @@ def main():
          '--icon', 'assets/icon.ico', '--manifest', 'res/app.manifest',
          '--logo', 'assets/logo_ui.png', '--banner', 'assets/banner_ui.png',
          '--bg', 'assets/bg_ui.png',
-         '--db', 'data/games_db.json', '--ver', '2.0.0'])
+         '--db', 'data/games_db.json', '--ver', '2.1.0'])
 
     print('=== [4/6] PE checks + pad to 100 MB ===')
     check_imports(full)
@@ -207,7 +207,7 @@ def main():
     pe_checksum_write(exe)
 
     print('=== [5/6] portable zip ===')
-    zpath = os.path.join(RELEASE, 'FPSBooster-v2.0-Portable.zip')
+    zpath = os.path.join(RELEASE, 'FPSBooster-v2.1-Portable.zip')
     with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         z.write(exe, 'fpsbooster.exe')
         z.write(os.path.join(ROOT, 'README.md'), 'README.md')

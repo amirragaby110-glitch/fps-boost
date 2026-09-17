@@ -185,3 +185,50 @@ int Proc_TrimAll() {
     CloseHandle(snap);
     return trimmed;
 }
+// Lock a guaranteed minimum RAM amount for any running process.
+// mb <= 0 means MAX: (available - 1GB reserve), at least 512MB.
+bool Proc_RamLock(DWORD pid, int mb, std::wstring& msg) {
+    bool fa = Strings_GetLang() == 1;
+    EnablePrivilege(L"SeIncreaseQuotaPrivilege");
+    int wantMB = mb;
+    if (wantMB <= 0) {
+        wantMB = RamAvailMB() - 1024;
+        if (wantMB < 512) wantMB = 512;
+    }
+    if (wantMB > 65536) wantMB = 65536;
+    HANDLE h = ProcOpen(pid);
+    if (!h) {
+        msg = fa ? L"خطا: دسترسی به پردازش ممکن نشد (خطای سیستمی)." : L"Error: cannot open process (access denied).";
+        return false;
+    }
+    SIZE_T curMin = 0, curMax = 0;
+    DWORD flags = 0;
+    GetProcessWorkingSetSizeEx(h, &curMin, &curMax, &flags);
+    SIZE_T newMin = (SIZE_T)wantMB * 1024 * 1024;
+    SIZE_T newMax = curMax > newMin ? curMax : newMin * 2;
+    bool ok = SetProcessWorkingSetSizeEx(h, newMin, newMax, QUOTA_LIMITS_HARDWS_MIN_ENABLE) != FALSE;
+    if (!ok) ok = SetProcessWorkingSetSize(h, newMin, newMax) != FALSE;
+    CloseHandle(h);
+    if (fa) {
+        msg = ok ? WFormat(L"%d مگابایت رم برای پردازش %u قفل شد (تضمینی، آزاد نمی‌شود)", wantMB, pid)
+                 : WFormat(L"قفل رم برای پردازش %u ممکن نشد (دسترسی ناکافی)", pid);
+    } else {
+        msg = ok ? WFormat(L"Locked %d MB RAM for process %u (guaranteed, never paged out)", wantMB, pid)
+                 : WFormat(L"Could not lock RAM for process %u (access denied)", pid);
+    }
+    return ok;
+}
+
+// Full image path of a running process (for "pin to library").
+bool Proc_ImagePath(DWORD pid, std::wstring& path) {
+    path.clear();
+    HANDLE h = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+    if (!h) h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!h) return false;
+    wchar_t buf[MAX_PATH * 2];
+    DWORD n = GetModuleFileNameExW(h, NULL, buf, MAX_PATH * 2);
+    CloseHandle(h);
+    if (n == 0) return false;
+    path = buf;
+    return true;
+}

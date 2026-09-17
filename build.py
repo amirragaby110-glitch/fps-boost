@@ -6,6 +6,7 @@ import os
 import sys
 import struct
 import subprocess
+import array
 import hashlib
 import zipfile
 
@@ -34,6 +35,24 @@ def sha256(path):
         for chunk in iter(lambda: f.read(1 << 20), b''):
             h.update(chunk)
     return h.hexdigest()
+
+
+def pe_checksum_write(path):
+    d = bytearray(open(path, 'rb').read())
+    pe = struct.unpack('<I', d[0x3C:0x40])[0]
+    co = pe + 24 + 64
+    struct.pack_into('<I', d, co, 0)
+    a = array.array('H', bytes(d))
+    s = sum(a)
+    while s >> 32:
+        s = (s & 0xFFFFFFFF) + (s >> 32)
+    s = (s & 0xFFFF) + (s >> 16)
+    s = s + (s >> 16)
+    csum = ((s & 0xFFFF) + len(d)) & 0xFFFFFFFF
+    struct.pack_into('<I', d, co, csum)
+    open(path, 'wb').write(d)
+    print('checksum: 0x%08x' % csum)
+    return csum
 
 
 def check_imports(path):
@@ -102,7 +121,7 @@ def pad_to_100mb(src, dst):
     print('padded: %d -> %d bytes (%.1f MB)' % (len(data), final, final / 1024 / 1024))
 
 
-SETUP_VER = '1.4.0'
+SETUP_VER = '1.5.0'
 
 def gen_setup_license():
     text = open(os.path.join(ROOT, 'LICENSE'), encoding='utf-8').read().strip()
@@ -146,6 +165,7 @@ def build_setup(payload):
             zeros -= n
         f.write(footer)
     assert os.path.getsize(out) == TARGET_SIZE, os.path.getsize(out)
+    pe_checksum_write(out)
     print('setup: stub %d + payload %d -> %d bytes' % (len(stub_data), len(pay_data), TARGET_SIZE))
     zpath = os.path.join(RELEASE, 'FPSBooster-Setup-v%s.zip' % SETUP_VER)
     with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
@@ -175,15 +195,16 @@ def main():
     run([sys.executable, 'tools/inject_resources.py', raw, full,
          '--icon', 'assets/icon.ico', '--manifest', 'res/app.manifest',
          '--logo', 'assets/logo_ui.png', '--banner', 'assets/banner_ui.png',
-         '--db', 'data/games_db.json', '--ver', '1.4.0'])
+         '--db', 'data/games_db.json', '--ver', '1.5.0'])
 
     print('=== [4/6] PE checks + pad to 100 MB ===')
     check_imports(full)
     exe = os.path.join(RELEASE, 'fpsbooster.exe')
     pad_to_100mb(full, exe)
+    pe_checksum_write(exe)
 
     print('=== [5/6] portable zip ===')
-    zpath = os.path.join(RELEASE, 'FPSBooster-v1.4-Portable.zip')
+    zpath = os.path.join(RELEASE, 'FPSBooster-v1.5-Portable.zip')
     with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         z.write(exe, 'fpsbooster.exe')
         z.write(os.path.join(ROOT, 'README.md'), 'README.md')

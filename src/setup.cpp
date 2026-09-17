@@ -18,7 +18,7 @@ static const char* kSetupLicenseUtf8 = "FPS Booster Pro (MIT License)\r\n(c) 202
 #endif
 
 static const wchar_t* kAppName = L"FPS Booster Pro";
-static const wchar_t* kVer = L"1.4.0";
+static const wchar_t* kVer = L"1.5.0";
 static const wchar_t* kExeName = L"fpsbooster.exe";
 static const wchar_t* kUnName = L"uninstall.exe";
 static const wchar_t* kRegUn = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\FPSBooster";
@@ -445,7 +445,7 @@ static bool BuildUI(bool uninstall) {
     wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
     wc.lpszClassName = L"FPSBoosterSetup";
-    wc.hIcon = LoadIconW(g_hInst, MAKEINTRESOURCEW(1));
+    wc.hIcon = LoadIconW(g_hInst, MAKEINTRESOURCEW(101));
     if (!RegisterClassW(&wc)) return false;
 
     int WW = 600, WH = 460;

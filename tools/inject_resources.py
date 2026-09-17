@@ -124,11 +124,8 @@ class ResBuilder:
             for nm in sorted(types[tk].keys()):
                 langs = types[tk][nm]
                 ndirs[(tk, nm)] = (alloc_dir(len(langs)), langs)
-        ldirs = {}
-        for tk in tkeys:
-            for nm in sorted(types[tk].keys()):
-                for li in range(len(types[tk][nm])):
-                    ldirs[(tk, nm, li)] = alloc_dir(1)
+        # NOTE: standard 3-level tree (type -> name -> lang -> data entry).
+        # Language entries point DIRECTLY at data entries (no extra level).
         # strings
         stroffs = {}
         for tk in tkeys:
@@ -172,10 +169,9 @@ class ResBuilder:
             fill_dir(doff, [(nm, False, ndirs[(tk, nm)][0], True) for nm in names])
             for nm in names:
                 doff2, langs = ndirs[(tk, nm)]
-                fill_dir(doff2, [(langs[li][0], False, ldirs[(tk, nm, li)], True)
+                fill_dir(doff2, [(langs[li][0], False, dents[(tk, nm, li)], False)
                                  for li in range(len(langs))])
                 for li, (lang, b) in enumerate(langs):
-                    fill_dir(ldirs[(tk, nm, li)], [(lang, False, dents[(tk, nm, li)], False)])
                     struct.pack_into('<IIII', out, dents[(tk, nm, li)],
                                      section_rva + blobs[(tk, nm, li)], len(b), 0, 0)
         return bytes(out)
@@ -287,11 +283,9 @@ def read_resources(path):
             _, lents = rdir(nb & 0x7FFFFFFF)
             for la, lb in lents:
                 lang = la & 0xFFFF
-                assert lb & 0x80000000
-                _, dents = rdir(lb & 0x7FFFFFFF)
-                for da, db in dents:
-                    assert not (db & 0x80000000)
-                    drva, dsz = struct.unpack('<II', d[base + (db & 0x7FFFFFFF):base + (db & 0x7FFFFFFF) + 8])
+                assert not (lb & 0x80000000), 'resource tree must be 3 levels'
+                if True:
+                    drva, dsz = struct.unpack('<II', d[base + (lb & 0x7FFFFFFF):base + (lb & 0x7FFFFFFF) + 8])
                     doff = None
                     for s in secs:
                         if s['vaddr'] <= drva < s['vaddr'] + max(s['vsize'], s['rawsize']):

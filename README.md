@@ -27,6 +27,7 @@ Everything is **backed up and reversible**, with an automatic **restore point** 
 - 📋 **Specs snapshot**: GPU readout on System page + one-click copy of full system summary
 - 📦 **Setup installer**: `FPSBooster-Setup-v1.4.exe` (100 MB) — wizard with license, folder choice, shortcuts, silent `/S` install, full uninstaller + Add/Remove Programs entry
 - 🐛 **Bug fixes**: settings (language/Beast/auto-boost) now actually persist — fixed malformed settings.json; hardened startup-manager buffers
+- ⚡ **v1.5 reliability**: fixed resource-tree bug (icon/logo/manifest now load correctly), real PE checksums, new ⚡FPS logo + banner, strict `tools/audit_pe.py` loader-conformance validator
 - 🛡️ Restore point + full backup (`backup.json`) + one-click **Undo everything**
 
 ## Download & Run
@@ -150,6 +151,7 @@ MIT — see [LICENSE](LICENSE).
 - 📋 **کپی مشخصات**: نمایش GPU در صفحه سیستم + کپی مشخصات کامل سیستم با یک کلیک
 - 📦 **فایل نصب (Setup)**: `FPSBooster-Setup-v1.4.exe` (۱۰۰ مگابایت) — ویزارد نصب با لایسنس، انتخاب پوشه، میانبرها، نصب سایلنت با `/S`، حذف کامل + ثبت در Add/Remove Programs
 - 🐛 **رفع باگ**: تنظیمات (زبان/Beast/بوست خودکار) حالا واقعا ذخیره می‌مانند — فایل خراب settings.json درست شد
+- ⚡ **پایداری ۱٫۵**: باگ درخت resources درست شد (آیکون/لوگو/مانیفست حالا درست لود می‌شوند)، چک‌سام واقعی PE، لوگوی جدید ⚡FPS + بنر، ابزار اعتبارسنجی `tools/audit_pe.py`
 - 🛡️ نقطه بازیابی + بکاپ کامل + **بازگردانی همه با یک کلیک**
 
 ## دانلود و اجرا

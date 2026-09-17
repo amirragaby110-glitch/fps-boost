@@ -40,7 +40,7 @@ static const StrRow kRows[] = {
 {SID_BTN_SAVE, "Save", "ذخیره"},
 {SID_BTN_CANCEL, "Cancel", "انصراف"},
 {SID_STATUS_READY, "Ready", "آماده"},
-{SID_VER, "Version 1.7.1", "نسخه 1.7.1"},
+{SID_VER, "Version 2.0.0", "نسخه 2.0.0"},
 
 {SID_DASH_TITLE, "Dashboard", "داشبورد"},
 {SID_DASH_SUB, "Your PC optimization status at a glance", "وضعیت بهینه‌سازی سیستم شما در یک نگاه"},
@@ -163,7 +163,7 @@ static const StrRow kRows[] = {
 {SID_SET_STARTUP, "Start with Windows", "اجرا همراه ویندوز"},
 {SID_SET_FOLDER, "Open data folder", "باز کردن پوشه داده‌ها"},
 {SID_SET_RESET, "Reset all settings", "بازنشانی همه تنظیمات"},
-{SID_SET_ABOUT, "FPS Booster Pro 1.7.1 - Ultimate Game FPS Optimizer", "FPS Booster Pro نسخه 1.7.1 - بهینه‌ساز نهایی اف‌پی‌اس بازی"},
+{SID_SET_ABOUT, "FPS Booster Pro 2.0.0 - Ultimate Game FPS Optimizer", "FPS Booster Pro نسخه 2.0.0 - بهینه‌ساز نهایی اف‌پی‌اس بازی"},
 {SID_SET_CONFIRM_RESET, "Reset all settings and revert all tweaks?", "همه تنظیمات بازنشانی و همه توییک‌ها برگردانده شود؟"},
 {SID_SET_RESTART_LANG, "Language will apply after restart.", "زبان بعد از اجرای مجدد اعمال می‌شود."},
 
@@ -272,6 +272,21 @@ static const StrRow kRows[] = {
 {SID_A_THINK, "Thinking...", "در حال فکر..."},
 {SID_A_ONTAG, "online", "آنلاین"},
 {SID_M_GAME, "Boosting foreground game...", "بوست بازی جلویی..."},
+{SID_SET_THEME, "Theme", "پوسته"},
+{SID_SET_THEME_DARK, "Dark", "تیره"},
+{SID_SET_THEME_LIGHT, "Light", "روشن"},
+{SID_SET_THEME_AUTO, "Auto (follow Windows)", "خودکار (مانند ویندوز)"},
+{SID_SET_ACCENT, "Accent color", "رنگ اصلی"},
+{SID_SET_ACC0, "Neon Cyan", "نئون فیروزه‌ای"},
+{SID_SET_ACC1, "Emerald", "زمردی"},
+{SID_SET_ACC2, "Sunset", "غروب"},
+{SID_SET_ACC3, "Violet", "بنفش"},
+{SID_SET_HOTKEY, "Global hotkey Ctrl+Alt+B = Boost now", "کلید میانبر سراسری Ctrl+Alt+B = بوست فوری"},
+{SID_SET_UPDATE, "Check for updates", "بررسی آپدیت"},
+{SID_UPD_LATEST, "You have the latest version (%s).", "آخرین نسخه را داری (%s)."},
+{SID_UPD_NEW, "New version %s is available! Get it from GitHub Releases.", "نسخه جدید %s منتشر شد! از صفحه Releases در گیت‌هاب بگیر."},
+{SID_UPD_FAIL, "Could not check for updates. Check your internet connection.", "بررسی آپدیت ممکن نشد. اینترنت را چک کن."},
+
 };
 
 static std::wstring g_cache[2][SID_COUNT];

@@ -29,6 +29,8 @@ Everything is **backed up and reversible**, with an automatic **restore point** 
 - 🐛 **Bug fixes**: settings (language/Beast/auto-boost) now actually persist — fixed malformed settings.json; hardened startup-manager buffers
 - ⚡ **v1.5 reliability**: fixed resource-tree bug (icon/logo/manifest now load correctly), real PE checksums, new ⚡FPS logo + banner, strict `tools/audit_pe.py` loader-conformance validator
 - 🌐 **v1.7 online AI + MAXIMUM**: keyless online AI answers (auto offline/online routing), 5 new max tweaks (Nagle, responsiveness, VBS...), MAX mode boosts foreground game + trims RAM
+- 🌗 **v2.0 official UI**: live Dark/Light/Auto theme + 4 accent colors, brand-new gradient-glow background, quick theme button, global Ctrl+Alt+B boost hotkey, one-click update checker, instant language switch (auto-restart)
+- 🎨 **v1.7.1 UI polish**: fully dark lists/progress bars/combos/checkboxes (no more white patches), neon Undo button, RTL text in Persian mode
 - 🤖 **v1.6 AI + processes**: offline AI advisor (can-I-run-it verdicts in EN/FA for 120+ games), Live Processes page (boost priority + RAM Focus), new dark neon background + sidebar theme, 4 new FPS tweaks (FSO-global, timer-res, mitigations, Xbox services)
 - 🛡️ Restore point + full backup (`backup.json`) + one-click **Undo everything**
 

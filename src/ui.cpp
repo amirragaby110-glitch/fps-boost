@@ -1,25 +1,98 @@
 // FPS Booster Pro - User interface (dark theme, sidebar, 9 pages)
 #include "app.h"
 #include <commdlg.h>
+#include <winhttp.h>
 #include <gdiplus.h>
 #include <stdio.h>
 
 using namespace Gdiplus;
 
-// ---------- Theme ----------
-#define COL_BG        RGB(8,12,24)
-#define COL_PANEL     RGB(15,21,38)
-#define COL_SIDE      RGB(6,9,20)
-#define COL_CARD      RGB(26,34,56)
-#define COL_ACCENT    RGB(34,211,238)
-#define COL_ACCENT2   RGB(232,121,249)
-#define COL_TEXT      RGB(226,232,240)
-#define COL_MUTED     RGB(148,163,184)
-#define COL_GREEN     RGB(52,211,153)
-#define COL_RED       RGB(248,113,113)
-#define COL_YELLOW    RGB(251,191,36)
-#define COL_ROWALT    RGB(24,32,54)
-#define COL_SELBAR    RGB(30,58,80)
+// ---------- Theme engine (dark / light / auto + accent color) ----------
+struct Theme {
+    COLORREF bgTop, bgBottom;   // page background gradient
+    COLORREF panel;             // control surface / list background
+    COLORREF side, side2;       // sidebar gradient
+    COLORREF card;              // cards, list header
+    COLORREF edit;              // edit / listbox / combo fields
+    COLORREF rowAlt, selBar;    // list rows + selection
+    COLORREF accent, accent2;   // gradient pair (accent-overrideable)
+    COLORREF text, muted;
+    COLORREF green, red, yellow;
+    COLORREF line;              // hairlines, grid
+    bool dark;
+};
+static Theme g_theme;
+#define COL_BG     (g_theme.bgTop)
+#define COL_PANEL  (g_theme.panel)
+#define COL_SIDE   (g_theme.side)
+#define COL_CARD   (g_theme.card)
+#define COL_ACCENT (g_theme.accent)
+#define COL_ACCENT2 (g_theme.accent2)
+#define COL_TEXT   (g_theme.text)
+#define COL_MUTED  (g_theme.muted)
+#define COL_GREEN  (g_theme.green)
+#define COL_RED    (g_theme.red)
+#define COL_YELLOW (g_theme.yellow)
+#define COL_ROWALT (g_theme.rowAlt)
+#define COL_SELBAR (g_theme.selBar)
+#define COL_EDIT   (g_theme.edit)
+#define COL_LINE   (g_theme.line)
+
+static int g_themeMode = 2; // 0 dark, 1 light, 2 auto (follow Windows)
+static int g_accent = 0;    // 0 neon, 1 emerald, 2 sunset, 3 violet
+static bool g_hotkey = true;
+static std::vector<HWND> g_lvWins; // listviews needing recolor on theme switch
+
+static bool WinThemeIsLight() {
+    HKEY k = NULL;
+    DWORD v = 0, sz = sizeof(v), ty = 0;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER,
+        L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", 0, KEY_READ, &k) == ERROR_SUCCESS) {
+        RegQueryValueExW(k, L"AppsUseLightTheme", NULL, &ty, (BYTE*)&v, &sz);
+        RegCloseKey(k);
+    }
+    return v != 0;
+}
+static void Theme_Resolve() {
+    bool dark = (g_themeMode == 0) || (g_themeMode == 2 && !WinThemeIsLight());
+    if (g_themeMode < 0 || g_themeMode > 2) g_themeMode = 2;
+    if (g_accent < 0 || g_accent > 3) g_accent = 0;
+    g_theme.dark = dark;
+    if (dark) {
+        g_theme.bgTop = RGB(11, 15, 31); g_theme.bgBottom = RGB(6, 9, 20);
+        g_theme.panel = RGB(15, 21, 38);
+        g_theme.side = RGB(6, 9, 20); g_theme.side2 = RGB(11, 17, 36);
+        g_theme.card = RGB(26, 34, 56);
+        g_theme.edit = RGB(10, 14, 26);
+        g_theme.rowAlt = RGB(24, 32, 54); g_theme.selBar = RGB(30, 58, 80);
+        g_theme.text = RGB(226, 232, 240); g_theme.muted = RGB(148, 163, 184);
+        g_theme.green = RGB(52, 211, 153); g_theme.red = RGB(248, 113, 113);
+        g_theme.yellow = RGB(251, 191, 36);
+        g_theme.line = RGB(40, 60, 96);
+    } else {
+        g_theme.bgTop = RGB(242, 245, 251); g_theme.bgBottom = RGB(221, 229, 242);
+        g_theme.panel = RGB(255, 255, 255);
+        g_theme.side = RGB(255, 255, 255); g_theme.side2 = RGB(231, 237, 247);
+        g_theme.card = RGB(236, 241, 248);
+        g_theme.edit = RGB(255, 255, 255);
+        g_theme.rowAlt = RGB(243, 246, 252); g_theme.selBar = RGB(186, 216, 245);
+        g_theme.text = RGB(15, 23, 42); g_theme.muted = RGB(100, 116, 139);
+        g_theme.green = RGB(4, 120, 87); g_theme.red = RGB(220, 38, 38);
+        g_theme.yellow = RGB(161, 98, 7);
+        g_theme.line = RGB(203, 213, 225);
+    }
+    static const COLORREF kAcc[4][2] = {
+        { RGB(34, 211, 238), RGB(232, 121, 249) },
+        { RGB(52, 211, 153), RGB(34, 197, 94) },
+        { RGB(251, 146, 60), RGB(244, 114, 182) },
+        { RGB(167, 139, 250), RGB(96, 165, 250) },
+    };
+    g_theme.accent = kAcc[g_accent][0];
+    g_theme.accent2 = kAcc[g_accent][1];
+}
+static COLORREF Darken(COLORREF c, int pct) {
+    return RGB(GetRValue(c) * pct / 100, GetGValue(c) * pct / 100, GetBValue(c) * pct / 100);
+}
 
 static int g_scale = 96;
 static int S(int v) { return (v * g_scale + 48) / 96; }
@@ -29,17 +102,30 @@ static Bitmap* g_imgLogo = NULL;
 static Bitmap* g_imgBanner = NULL;
 static Bitmap* g_imgBg = NULL;
 
-// Colored labels registry
-struct ColorLabel { HWND h; COLORREF c; };
+// Colored labels registry (role-based: resolves against live theme)
+enum LRole { LR_TEXT, LR_MUTED, LR_ACCENT, LR_ACCENT2, LR_GREEN, LR_RED, LR_YELLOW, LR_WHITE };
+struct ColorLabel { HWND h; int role; };
 static std::vector<ColorLabel> g_colors;
-static void LabelColor(HWND h, COLORREF c) {
-    for (size_t i = 0; i < g_colors.size(); i++)
-        if (g_colors[i].h == h) { g_colors[i].c = c; return; }
-    ColorLabel e; e.h = h; e.c = c; g_colors.push_back(e);
+static COLORREF RoleColor(int role) {
+    switch (role) {
+    case LR_MUTED: return g_theme.muted;
+    case LR_ACCENT: return g_theme.dark ? g_theme.accent : Darken(g_theme.accent, 62);
+    case LR_ACCENT2: return g_theme.dark ? g_theme.accent2 : Darken(g_theme.accent2, 62);
+    case LR_GREEN: return g_theme.green;
+    case LR_RED: return g_theme.red;
+    case LR_YELLOW: return g_theme.yellow;
+    case LR_WHITE: return g_theme.dark ? RGB(255, 255, 255) : RGB(15, 23, 42);
+    default: return g_theme.text;
+    }
 }
-static void SetLabel(HWND h, const std::wstring& s, COLORREF c) {
+static void LabelColor(HWND h, int role) {
+    for (size_t i = 0; i < g_colors.size(); i++)
+        if (g_colors[i].h == h) { g_colors[i].role = role; return; }
+    ColorLabel e; e.h = h; e.role = role; g_colors.push_back(e);
+}
+static void SetLabel(HWND h, const std::wstring& s, int role) {
     SetWindowTextW(h, s.c_str());
-    LabelColor(h, c);
+    LabelColor(h, role);
     InvalidateRect(h, NULL, TRUE);
 }
 static void ProgSet(HWND h, int pct) {
@@ -68,18 +154,22 @@ void Settings_Load() {
     g_beastPrev = root.wstr("beastprev");
     g_autoBoost = root.num("autoboost", 0) != 0;
     g_aiOnline = root.num("aionline", 1) != 0;
+    g_themeMode = root.num("theme", 2);
+    g_accent = root.num("accent", 0);
+    g_hotkey = root.num("hotkey", 1) != 0;
 }
 void Settings_Save() {
     char nb[128];
     snprintf(nb, 128, "{\"lang\":%d,\"tray\":%d,\"score\":%d,\"autoboost\":%d,\"aionline\":%d", Strings_GetLang(), g_closeToTray?1:0, g_lastScore, g_autoBoost?1:0, g_aiOnline?1:0);
     std::string j = nb;
     j += ",\"lastBoost\":\"" + JsonEscapeW(g_lastBoost) + "\"";
-    j += ",\"beast\":\"" + JsonEscapeW(g_beastGuid) + "\",\"beastprev\":\"" + JsonEscapeW(g_beastPrev) + "\"}";
+    j += ",\"beast\":\"" + JsonEscapeW(g_beastGuid) + "\",\"beastprev\":\"" + JsonEscapeW(g_beastPrev) + "\"";
+    j += ",\"theme\":" + std::to_string(g_themeMode) + ",\"accent\":" + std::to_string(g_accent) + ",\"hotkey\":" + std::to_string(g_hotkey ? 1 : 0) + "}";
     WriteFileText(JoinPath(g_dataDir, L"settings.json"), j);
 }
 
 // ---------- Control helpers ----------
-static HWND hSide = NULL, hTitle = NULL, hLangBtn = NULL, hAdminBadge = NULL, hStatusBar = NULL;
+static HWND hSide = NULL, hTitle = NULL, hLangBtn = NULL, hAdminBadge = NULL, hStatusBar = NULL, hThemeBtn = NULL;
 
 static HWND Mk(HWND parent, const wchar_t* cls, const wchar_t* text, DWORD style, DWORD ex,
                int x, int y, int w, int h, int id, HFONT f) {
@@ -93,7 +183,7 @@ static HWND MkLabel(HWND p, int x, int y, int w, int h, HFONT f = NULL) {
 }
 static HWND MkHeader(HWND p, int x, int y, int w, StrId t) {
     HWND h = MkLabel(p, x, y, w, 26, g_hFontBig);
-    SetLabel(h, T(t), COL_ACCENT);
+    SetLabel(h, T(t), LR_ACCENT);
     return h;
 }
 static HWND MkButton(HWND p, int id, int x, int y, int w, int h, StrId t) {
@@ -137,6 +227,7 @@ static HWND MkList(HWND p, int id, int x, int y, int w, int h) {
         ListView_SetBkColor(l, COL_PANEL);
         ListView_SetTextColor(l, COL_TEXT);
         ListView_SetTextBkColor(l, COL_PANEL);
+        g_lvWins.push_back(l);
     }
     return l;
 }
@@ -170,21 +261,43 @@ static LPARAM LVGetData(HWND l, int row) {
 }
 
 // ---------- Page windows ----------
+static Gdiplus::Color ThColor(BYTE a, COLORREF c) {
+    return Gdiplus::Color(a, GetRValue(c), GetGValue(c), GetBValue(c));
+}
+// Modern procedural background: vertical gradient + two soft accent glows
+static void PaintPageBg(HDC dc, int W, int H) {
+    if (W < 1) W = 1; if (H < 1) H = 1;
+    Graphics g(dc);
+    LinearGradientBrush bg(Point(0, 0), Point(0, H),
+        ThColor(255, g_theme.bgTop), ThColor(255, g_theme.bgBottom));
+    g.FillRectangle(&bg, 0, 0, W, H);
+    int R = W < H ? W : H;
+    int rad = R * 3 / 4 + 40;
+    BYTE ga = g_theme.dark ? (BYTE)30 : (BYTE)22;
+    GraphicsPath p1;
+    int cx1 = W * 17 / 20, cy1 = H / 8;
+    p1.AddEllipse(cx1 - rad, cy1 - rad, rad * 2, rad * 2);
+    PathGradientBrush g1(&p1);
+    g1.SetCenterColor(ThColor(ga, g_theme.accent));
+    Color s1[1]; s1[0] = ThColor(0, g_theme.accent);
+    int n1 = 1; g1.SetSurroundColors(s1, &n1);
+    g1.SetCenterPoint(Point(cx1, cy1));
+    g.FillPath(&g1, &p1);
+    GraphicsPath p2;
+    int cx2 = W / 12, cy2 = H * 9 / 10;
+    p2.AddEllipse(cx2 - rad, cy2 - rad, rad * 2, rad * 2);
+    PathGradientBrush g2(&p2);
+    g2.SetCenterColor(ThColor(ga, g_theme.accent2));
+    Color s2[1]; s2[0] = ThColor(0, g_theme.accent2);
+    int n2 = 1; g2.SetSurroundColors(s2, &n2);
+    g2.SetCenterPoint(Point(cx2, cy2));
+    g.FillPath(&g2, &p2);
+}
 static LRESULT CALLBACK PageProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     switch (m) {
     case WM_ERASEBKGND: {
-        HDC dc = (HDC)w;
         RECT r; GetClientRect(h, &r);
-        if (g_imgBg) {
-            Graphics g(dc);
-            g.SetInterpolationMode(InterpolationModeBilinear);
-            int wpx = r.right - r.left, hpx = r.bottom - r.top;
-            if (wpx > 0 && hpx > 0) {
-                g.DrawImage(g_imgBg, r.left, r.top, wpx, hpx);
-                SolidBrush dim(Color(88, 6, 9, 20));
-                g.FillRectangle(&dim, r.left, r.top, wpx, hpx);
-            } else FillRect(dc, &r, hBrPanel);
-        } else FillRect(dc, &r, hBrPanel);
+        PaintPageBg((HDC)w, r.right - r.left, r.bottom - r.top);
         return 1;
     }
     case WM_CTLCOLORSTATIC:
@@ -224,9 +337,9 @@ static LRESULT CALLBACK SideProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         RECT r; GetClientRect(h, &r);
         Graphics g(dc);
         int gh = r.bottom > 1 ? r.bottom : 1;
-        LinearGradientBrush bg(Point(0, 0), Point(0, gh), Color(6, 9, 20), Color(11, 17, 36));
+        LinearGradientBrush bg(Point(0, 0), Point(0, gh), ThColor(255, g_theme.side), ThColor(255, g_theme.side2));
         g.FillRectangle(&bg, r.left, r.top, r.right - r.left, gh);
-        SolidBrush glow(Color(70, 34, 211, 238));
+        SolidBrush glow(ThColor(70, g_theme.accent));
         g.FillRectangle(&glow, 0, 0, r.right, S(3));
         g.SetInterpolationMode(InterpolationModeHighQualityBicubic);
         if (g_imgLogo) {
@@ -244,12 +357,12 @@ static LRESULT CALLBACK SideProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         RECT tr2 = {0, S(190), r.right, S(210)};
         DrawTextW(dc, T(SID_APP_TAG), -1, &tr2, DT_CENTER | DT_SINGLELINE);
         // divider
-        HPEN pen = CreatePen(PS_SOLID, 1, RGB(40, 60, 96));
+        HPEN pen = CreatePen(PS_SOLID, 1, COL_LINE);
         HPEN op = (HPEN)SelectObject(dc, pen);
         MoveToEx(dc, S(20), S(222), NULL); LineTo(dc, r.right - S(20), S(222));
         SelectObject(dc, op); DeleteObject(pen);
         // version at bottom
-        SetTextColor(dc, RGB(90, 100, 130));
+        SetTextColor(dc, COL_MUTED);
         RECT vr = {0, r.bottom - S(34), r.right, r.bottom - S(10)};
         DrawTextW(dc, T(SID_VER), -1, &vr, DT_CENTER | DT_SINGLELINE);
         SelectObject(dc, old);
@@ -312,30 +425,30 @@ static void DashRefresh() {
     int ap = 0, tt = 0;
     g_lastScore = Tweaks_Score(&ap, &tt);
     InvalidateRect(hDashPic, NULL, TRUE);
-    SetLabel(hDashSys[0], SysCpuName(), COL_TEXT);
-    SetLabel(hDashSys[1], SysGpuName(), COL_TEXT);
-    SetLabel(hDashSys[2], WFormat(L"%s (%d GB)", SysRamString().c_str(), RamTotalMB() / 1024), COL_TEXT);
-    SetLabel(hDashSys[3], SysOsString(), COL_TEXT);
-    SetLabel(hDashSys[4], PowerGetActiveName(), COL_TEXT);
-    SetLabel(hDashSys[5], SysDisplayString(), COL_TEXT);
+    SetLabel(hDashSys[0], SysCpuName(), LR_TEXT);
+    SetLabel(hDashSys[1], SysGpuName(), LR_TEXT);
+    SetLabel(hDashSys[2], WFormat(L"%s (%d GB)", SysRamString().c_str(), RamTotalMB() / 1024), LR_TEXT);
+    SetLabel(hDashSys[3], SysOsString(), LR_TEXT);
+    SetLabel(hDashSys[4], PowerGetActiveName(), LR_TEXT);
+    SetLabel(hDashSys[5], SysDisplayString(), LR_TEXT);
     for (int i = 0; i < 6; i++) {
         const Tweak* t = TweakById(kDashTweaks[i]);
-        std::wstring nm, st; COLORREF c = COL_MUTED;
+        std::wstring nm, st; int c = LR_MUTED;
         if (t) {
             TweakDisplayName(*t, nm);
             int s = TweakCheck(*t);
-            if (s == 1) { st = T(SID_APPLIED); c = COL_GREEN; }
-            else if (s == 0) { st = T(SID_NOT_APPLIED); c = COL_RED; }
-            else { st = T(SID_NA); c = COL_YELLOW; }
+            if (s == 1) { st = T(SID_APPLIED); c = LR_GREEN; }
+            else if (s == 0) { st = T(SID_NOT_APPLIED); c = LR_RED; }
+            else { st = T(SID_NA); c = LR_YELLOW; }
         }
-        SetLabel(hDashNames[i], nm, COL_TEXT);
+        SetLabel(hDashNames[i], nm, LR_TEXT);
         SetLabel(hDashVals[i], st, c);
     }
     wchar_t nb[64];
     StringCchPrintfW(nb, 64, L"%s: %d", T(SID_DASH_GAMES), (int)Games_All().size());
-    SetLabel(hDashInfo1, nb, COL_MUTED);
+    SetLabel(hDashInfo1, nb, LR_MUTED);
     SetLabel(hDashInfo2, WFormat(L"%s: %s", T(SID_DASH_LASTBOOST),
-        g_lastBoost.empty() ? T(SID_DASH_NEVER) : g_lastBoost.c_str()), COL_MUTED);
+        g_lastBoost.empty() ? T(SID_DASH_NEVER) : g_lastBoost.c_str()), LR_MUTED);
     SYSTEMTIME st; GetLocalTime(&st);
     StrId tips[] = {SID_TIP1, SID_TIP2, SID_TIP3, SID_TIP4, SID_TIP5};
     SetWindowTextW(hDashTip, WFormat(L"%s: %s", T(SID_DASH_TIP), T(tips[st.wDay % 5])).c_str());
@@ -345,7 +458,7 @@ static void BuildDash(HWND p) {
     MkHeader(p, 0, 158, 430, SID_DASH_SYSTEM);
     for (int i = 0; i < 6; i++) {
         HWND n = MkLabel(p, 0, 188 + i * 30, 150, 24);
-        SetLabel(n, L"", COL_MUTED);
+        SetLabel(n, L"", LR_MUTED);
         static StrId ids[] = {SID_DASH_CPU, SID_DASH_GPU, SID_DASH_RAM, SID_DASH_OS, SID_DASH_POWER, SID_DASH_DISPLAY};
         SetWindowTextW(n, WFormat(L"%s:", T(ids[i])).c_str());
         hDashSys[i] = MkLabel(p, 150, 188 + i * 30, 290, 24);
@@ -396,7 +509,7 @@ static void GamesFillList() {
         SetChecked(hGamesPower, g.powerBoost);
         SetWindowTextW(hGamesKill, g.killList.c_str());
         std::wstring tip = Games_TipFor(g.path);
-        if (!tip.empty()) SetLabel(hGamesTip, WFormat(L"%s %s", T(SID_G_TIP_TITLE), tip.c_str()), COL_YELLOW);
+        if (!tip.empty()) SetLabel(hGamesTip, WFormat(L"%s %s", T(SID_G_TIP_TITLE), tip.c_str()), LR_YELLOW);
         else SetWindowTextW(hGamesTip, L"");
         g_gamesLoading = false;
         EnableWindow(hGamesLaunch, !Games_IsBusy());
@@ -454,20 +567,20 @@ static void BuildGames(HWND p) {
     hGamesArgs = MkEdit(p, IDC_G_ARGS, 400, 340, 492, 28);
     HWND l4 = MkLabel(p, 400, 376, 480, 24); SetWindowTextW(l4, T(SID_G_KILL));
     hGamesKill = MkEdit(p, IDC_G_KILL, 400, 400, 492, 28);
-    HWND hint = MkLabel(p, 400, 430, 480, 24); SetLabel(hint, T(SID_G_KILL_HINT), COL_MUTED);
+    HWND hint = MkLabel(p, 400, 430, 480, 24); SetLabel(hint, T(SID_G_KILL_HINT), LR_MUTED);
     hGamesLaunch = MkCTA(p, IDC_G_LAUNCH, 0, 506, 300, 54, SID_G_LAUNCH);
     hGamesStatus = MkLabel(p, 320, 512, 572, 26, g_hFontBig);
     hGamesTip = MkLabel(p, 320, 540, 572, 40);
     hGamesAuto = MkCheck(p, IDC_G_AUTO, 0, 588, 560, SID_G_AUTO);
     SetChecked(hGamesAuto, g_autoBoost);
     hGamesAutoSt = MkLabel(p, 570, 588, 322, 26);
-    if (g_autoBoost) SetLabel(hGamesAutoSt, T(SID_G_AUTO_WATCH), COL_MUTED);
+    if (g_autoBoost) SetLabel(hGamesAutoSt, T(SID_G_AUTO_WATCH), LR_MUTED);
 }
 
 // ---------- Boost ----------
 static void BuildBoost(HWND p) {
     HWND d = MkLabel(p, 0, 0, 892, 40);
-    SetLabel(d, T(SID_B_SUB), COL_MUTED);
+    SetLabel(d, T(SID_B_SUB), LR_MUTED);
     hBoostStart = MkCTA(p, IDC_B_START, 0, 44, 340, 56, SID_B_START);
     hBoostUndo = MkCTA(p, IDC_B_UNDO, 360, 44, 220, 56, SID_B_UNDO);
     hBoostMax = MkCTA(p, IDC_B_MAX, 600, 44, 292, 56, SID_B_MAXFPS);
@@ -550,14 +663,14 @@ static void SysRefresh() {
         memmove(g_ramHist, g_ramHist + 1, sizeof(int) * 89);
         g_cpuHist[89] = cpu; g_ramHist[89] = ram;
     }
-    SetLabel(hSysCpu, WFormat(L"%s: %d%%", T(SID_S_CPU), cpu), cpu > 85 ? COL_RED : COL_TEXT);
+    SetLabel(hSysCpu, WFormat(L"%s: %d%%", T(SID_S_CPU), cpu), cpu > 85 ? LR_RED : LR_TEXT);
     SetLabel(hSysRam, WFormat(L"%s: %d%%  (%d MB %s)", T(SID_S_RAM), ram, RamAvailMB(),
-        Strings_GetLang() == 1 ? L"آزاد" : L"free"), ram > 90 ? COL_RED : COL_TEXT);
-    SetLabel(hSysUp, WFormat(L"%s: %s", T(SID_S_UPTIME), SysUptimeString().c_str()), COL_TEXT);
+        Strings_GetLang() == 1 ? L"آزاد" : L"free"), ram > 90 ? LR_RED : LR_TEXT);
+    SetLabel(hSysUp, WFormat(L"%s: %s", T(SID_S_UPTIME), SysUptimeString().c_str()), LR_TEXT);
     ULONG cur = 0, mn = 0, mx = 0;
     if (TimerQuery(cur, mn, mx))
-        SetLabel(hSysTimer, WFormat(L"%s: %.1f ms", T(SID_S_TIMER), cur / 10000.0), COL_TEXT);
-    if (hSysGpu) SetLabel(hSysGpu, WFormat(L"%s: %s", T(SID_S_GPU), SysGpuName().c_str()), COL_TEXT);
+        SetLabel(hSysTimer, WFormat(L"%s: %.1f ms", T(SID_S_TIMER), cur / 10000.0), LR_TEXT);
+    if (hSysGpu) SetLabel(hSysGpu, WFormat(L"%s: %s", T(SID_S_GPU), SysGpuName().c_str()), LR_TEXT);
     if (hSysGraph) InvalidateRect(hSysGraph, NULL, TRUE);
 }
 static void BuildSystem(HWND p) {
@@ -718,29 +831,56 @@ static void StartupFillList() {
         LVSetData(hSetStList, r, (LPARAM)i);
     }
 }
+static HWND hSetTheme = NULL, hSetAccent = NULL, hSetHotkey = NULL;
 static void BuildSettings(HWND p) {
     HWND l1 = MkLabel(p, 0, 8, 200, 26); SetWindowTextW(l1, T(SID_SET_LANG));
     hSetLang = MkCombo(p, IDC_SET_LANG, 210, 6, 240);
     SendMessageW(hSetLang, CB_ADDSTRING, 0, (LPARAM)T(SID_SET_LANG_EN));
     SendMessageW(hSetLang, CB_ADDSTRING, 0, (LPARAM)T(SID_SET_LANG_FA));
     SendMessageW(hSetLang, CB_SETCURSEL, Strings_GetLang(), 0);
-    hSetTray = MkCheck(p, IDC_SET_TRAY, 0, 52, 420, SID_SET_TRAY);
+    HWND lth = MkLabel(p, 0, 44, 200, 26); SetWindowTextW(lth, T(SID_SET_THEME));
+    hSetTheme = MkCombo(p, IDC_SET_THEME, 210, 42, 240);
+    SendMessageW(hSetTheme, CB_ADDSTRING, 0, (LPARAM)T(SID_SET_THEME_DARK));
+    SendMessageW(hSetTheme, CB_ADDSTRING, 0, (LPARAM)T(SID_SET_THEME_LIGHT));
+    SendMessageW(hSetTheme, CB_ADDSTRING, 0, (LPARAM)T(SID_SET_THEME_AUTO));
+    SendMessageW(hSetTheme, CB_SETCURSEL, g_themeMode, 0);
+    HWND lac = MkLabel(p, 0, 80, 200, 26); SetWindowTextW(lac, T(SID_SET_ACCENT));
+    hSetAccent = MkCombo(p, IDC_SET_ACCENT, 210, 78, 240);
+    SendMessageW(hSetAccent, CB_ADDSTRING, 0, (LPARAM)T(SID_SET_ACC0));
+    SendMessageW(hSetAccent, CB_ADDSTRING, 0, (LPARAM)T(SID_SET_ACC1));
+    SendMessageW(hSetAccent, CB_ADDSTRING, 0, (LPARAM)T(SID_SET_ACC2));
+    SendMessageW(hSetAccent, CB_ADDSTRING, 0, (LPARAM)T(SID_SET_ACC3));
+    SendMessageW(hSetAccent, CB_SETCURSEL, g_accent, 0);
+    hSetTray = MkCheck(p, IDC_SET_TRAY, 0, 116, 420, SID_SET_TRAY);
     SetChecked(hSetTray, g_closeToTray);
-    hSetStartup = MkCheck(p, IDC_SET_STARTUP, 0, 84, 420, SID_SET_STARTUP);
+    hSetStartup = MkCheck(p, IDC_SET_STARTUP, 0, 148, 420, SID_SET_STARTUP);
     SetChecked(hSetStartup, RegValueExists(HKEY_CURRENT_USER,
         L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", L"FPSBoosterPro"));
-    MkButton(p, IDC_SET_FOLDER, 0, 130, 240, 34, SID_SET_FOLDER);
-    MkButton(p, IDC_SET_RESET, 0, 174, 240, 34, SID_SET_RESET);
-    HWND ab = MkLabel(p, 0, 230, 892, 30);
-    SetLabel(ab, T(SID_SET_ABOUT), COL_MUTED);
-    MkHeader(p, 0, 268, 400, SID_SET_STARTUP_T);
-    hSetStList = MkList(p, IDC_SET_STLIST, 0, 300, 892, 250);
+    hSetHotkey = MkCheck(p, IDC_SET_HOTKEY, 0, 180, 560, SID_SET_HOTKEY);
+    SetChecked(hSetHotkey, g_hotkey);
+    MkButton(p, IDC_SET_FOLDER, 0, 216, 240, 34, SID_SET_FOLDER);
+    MkButton(p, IDC_SET_UPDATE, 250, 216, 260, 34, SID_SET_UPDATE);
+    MkButton(p, IDC_SET_RESET, 520, 216, 240, 34, SID_SET_RESET);
+    HWND ab = MkLabel(p, 0, 262, 892, 30);
+    SetLabel(ab, T(SID_SET_ABOUT), LR_MUTED);
+    MkHeader(p, 0, 300, 400, SID_SET_STARTUP_T);
+    hSetStList = MkList(p, IDC_SET_STLIST, 0, 332, 892, 220);
     int sids[] = {SID_SET_ST_COL1, SID_SET_ST_COL2};
     int swd[] = {640, 220};
     LVCols(hSetStList, sids, swd, 2);
-    MkButton(p, IDC_SET_STEN, 0, 560, 160, 34, SID_SET_ST_ENABLE);
-    MkButton(p, IDC_SET_STDIS, 170, 560, 160, 34, SID_SET_ST_DISABLE);
+    MkButton(p, IDC_SET_STEN, 0, 562, 160, 34, SID_SET_ST_ENABLE);
+    MkButton(p, IDC_SET_STDIS, 170, 562, 160, 34, SID_SET_ST_DISABLE);
     StartupFillList();
+}
+static void SettingsRefresh() {
+    if (!hSetTheme) return;
+    SendMessageW(hSetTheme, CB_SETCURSEL, g_themeMode, 0);
+    SendMessageW(hSetAccent, CB_SETCURSEL, g_accent, 0);
+    SetChecked(hSetTray, g_closeToTray);
+    SetChecked(hSetHotkey, g_hotkey);
+    SetChecked(hSetStartup, RegValueExists(HKEY_CURRENT_USER,
+        L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", L"FPSBoosterPro"));
+    InvalidateRect(g_hPages[PAGE_SETTINGS], NULL, TRUE);
 }
 
 // ---------- Power ----------
@@ -756,10 +896,10 @@ static std::wstring PowFmtVal(const PowerSetting& p, DWORD v) {
     return WFormat(L"%d", v);
 }
 static void PowRefresh() {
-    SetLabel(hPowPlan, WFormat(L"%s %s", T(SID_P_CUR), PowerGetActiveName().c_str()), COL_TEXT);
+    SetLabel(hPowPlan, WFormat(L"%s %s", T(SID_P_CUR), PowerGetActiveName().c_str()), LR_TEXT);
     bool on = BeastIsActive();
     SetWindowTextW(hPowBeast, T(on ? SID_P_DEACTIVATE : SID_P_ACTIVATE));
-    SetLabel(hPowStatus, WFormat(L"%s: %s", T(SID_P_BEAST), T(on ? SID_P_ACTIVE : SID_P_OFF)), on ? COL_GREEN : COL_MUTED);
+    SetLabel(hPowStatus, WFormat(L"%s: %s", T(SID_P_BEAST), T(on ? SID_P_ACTIVE : SID_P_OFF)), on ? LR_GREEN : LR_MUTED);
     ListView_DeleteAllItems(hPowList);
     int n = 0;
     const PowerSetting* ps = PowerSettings(&n);
@@ -776,7 +916,7 @@ static void BuildPower(HWND p) {
     MkButton(p, IDC_P_REFRESH, 712, 0, 180, 32, SID_BTN_REFRESH);
     hPowStatus = MkLabel(p, 0, 40, 560, 26, g_hFontBig);
     hPowNote = MkLabel(p, 560, 40, 332, 26);
-    SetLabel(hPowNote, T(SID_P_NOTE), COL_MUTED);
+    SetLabel(hPowNote, T(SID_P_NOTE), LR_MUTED);
     hPowBeast = MkCTA(p, IDC_P_BEAST, 0, 72, 340, 54, SID_P_ACTIVATE);
     hPowList = MkList(p, IDC_P_LIST, 0, 140, 892, 380);
     int ids[] = {SID_P_COL_SET, SID_P_COL_BEAST, SID_P_COL_CUR};
@@ -796,28 +936,28 @@ static HWND hNetPingRes = NULL, hNetC1 = NULL, hNetC2 = NULL;
 static int g_dnsPingMs[5] = {-1, -1, -1, -1, -1};
 static void NetRefresh() {
     if (!hNetDnsSt) return;
-    SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_TEXT);
+    SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), LR_TEXT);
     bool busy = NetTestBusy();
     EnableWindow(hNetStart, busy ? FALSE : TRUE);
     EnableWindow(hNetCancel, busy ? TRUE : FALSE);
 }
 static void BuildNet(HWND p) {
     hNetStatus = MkLabel(p, 0, 4, 700, 26, g_hFontBig);
-    SetLabel(hNetStatus, T(SID_STATUS_READY), COL_TEXT);
-    HWND srv = MkLabel(p, 0, 32, 400, 24); SetLabel(srv, T(SID_N_SERVER), COL_MUTED);
+    SetLabel(hNetStatus, T(SID_STATUS_READY), LR_TEXT);
+    HWND srv = MkLabel(p, 0, 32, 400, 24); SetLabel(srv, T(SID_N_SERVER), LR_MUTED);
     hNetProg = Mk(p, WC_STATICW, L"", WS_CHILD | WS_VISIBLE | SS_OWNERDRAW, 0,
         0, 60, 892, 26, IDC_N_PROG, NULL);
     ProgSet(hNetProg, 0);
     hNetPing = MkLabel(p, 0, 96, 200, 34, g_hFontBig);
     hNetDown = MkLabel(p, 220, 96, 300, 34, g_hFontBig);
     hNetUp = MkLabel(p, 540, 96, 300, 34, g_hFontBig);
-    SetLabel(hNetPing, WFormat(L"%s: --", T(SID_N_PING)), COL_TEXT);
-    SetLabel(hNetDown, WFormat(L"%s: --", T(SID_N_DOWN)), COL_TEXT);
-    SetLabel(hNetUp, WFormat(L"%s: --", T(SID_N_UP)), COL_TEXT);
+    SetLabel(hNetPing, WFormat(L"%s: --", T(SID_N_PING)), LR_TEXT);
+    SetLabel(hNetDown, WFormat(L"%s: --", T(SID_N_DOWN)), LR_TEXT);
+    SetLabel(hNetUp, WFormat(L"%s: --", T(SID_N_UP)), LR_TEXT);
     hNetIp = MkLabel(p, 0, 136, 440, 26);
-    SetLabel(hNetIp, WFormat(L"%s: ...", T(SID_N_IP)), COL_MUTED);
+    SetLabel(hNetIp, WFormat(L"%s: ...", T(SID_N_IP)), LR_MUTED);
     hNetGrade = MkLabel(p, 452, 132, 440, 34, g_hFontBig);
-    SetLabel(hNetGrade, WFormat(L"%s: --", T(SID_N_GRADE)), COL_TEXT);
+    SetLabel(hNetGrade, WFormat(L"%s: --", T(SID_N_GRADE)), LR_TEXT);
     hNetStart = MkCTA(p, IDC_N_START, 0, 176, 300, 54, SID_N_START);
     hNetCancel = MkButton(p, IDC_N_CANCEL, 320, 176, 200, 54, SID_N_CANCEL);
     EnableWindow(hNetCancel, FALSE);
@@ -845,7 +985,7 @@ static void BuildNet(HWND p) {
         EnableWindow(hNetDnsApply, FALSE); EnableWindow(hNetFastest, FALSE);
         EnableWindow(cset, FALSE);
     }
-    SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_TEXT);
+    SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), LR_TEXT);
 }
 
 // ---------- AI advisor ----------
@@ -862,19 +1002,19 @@ static void AiAsk() {
     size_t a = 0, b = wcslen(q);
     while (a < b && iswspace(q[a])) a++;
     while (b > a && iswspace(q[b - 1])) b--;
-    if (a >= b) { SetLabel(hAiStatus, T(SID_A_HINT), COL_YELLOW); return; }
+    if (a >= b) { SetLabel(hAiStatus, T(SID_A_HINT), LR_YELLOW); return; }
     q[b] = 0;
     std::wstring qq = q + a;
     SetWindowTextW(hAiInput, L"");
     if (g_aiOnline && Ai_NeedsOnline(qq)) {
         AiAppendBlock(WFormat(L"%s: %s\r\n", T(SID_A_YOU), qq.c_str()));
         g_aiPending = qq;
-        SetLabel(hAiStatus, T(SID_A_THINK), COL_ACCENT);
+        SetLabel(hAiStatus, T(SID_A_THINK), LR_ACCENT);
         AiOnline_AskAsync(g_hMain, qq);
     } else {
         std::wstring ans = Ai_Answer(qq);
         AiAppendBlock(WFormat(L"%s: %s\r\n%s\r\n\r\n", T(SID_A_YOU), qq.c_str(), ans.c_str()));
-        SetLabel(hAiStatus, T(SID_STATUS_READY), COL_MUTED);
+        SetLabel(hAiStatus, T(SID_STATUS_READY), LR_MUTED);
     }
 }
 static void AiOnlineDone(bool ok) {
@@ -886,7 +1026,7 @@ static void AiOnlineDone(bool ok) {
         std::wstring fb = Ai_Answer(g_aiPending);
         AiAppendBlock(WFormat(L"%s:\r\n%s\r\n\r\n", T(SID_NAV_AI), fb.c_str()));
     }
-    SetLabel(hAiStatus, T(SID_STATUS_READY), COL_MUTED);
+    SetLabel(hAiStatus, T(SID_STATUS_READY), LR_MUTED);
 }
 static void BuildAI(HWND p) {
     hAiInput = MkEdit(p, IDC_A_INPUT, 0, 0, 700, 32);
@@ -895,10 +1035,10 @@ static void BuildAI(HWND p) {
     hAiQ2 = MkButton(p, IDC_A_Q2, 290, 40, 280, 30, SID_A_Q2);
     hAiQ3 = MkButton(p, IDC_A_Q3, 580, 40, 280, 30, SID_A_Q3);
     hAiHint = MkLabel(p, 0, 76, 860, 22);
-    SetLabel(hAiHint, T(SID_A_HINT), COL_MUTED);
+    SetLabel(hAiHint, T(SID_A_HINT), LR_MUTED);
     hAiOut = MkEdit(p, IDC_A_OUT, 0, 100, 860, 440, true, true);
     hAiStatus = MkLabel(p, 0, 548, 860, 24);
-    SetLabel(hAiStatus, T(SID_STATUS_READY), COL_MUTED);
+    SetLabel(hAiStatus, T(SID_STATUS_READY), LR_MUTED);
     hAiOnline = MkCheck(p, IDC_A_ONLINE, 660, 76, 200, SID_A_ONLINE);
     SetChecked(hAiOnline, g_aiOnline);
     SetWindowTextW(hAiOut, Ai_Answer(L"").c_str());
@@ -931,13 +1071,60 @@ static void BuildProc(HWND p) {
     int ww[] = {380, 90, 130, 120};
     LVCols(hProcList, ids, ww, 4);
     hProcHint = MkLabel(p, 0, 448, 860, 22);
-    SetLabel(hProcHint, T(SID_R_HINT), COL_MUTED);
+    SetLabel(hProcHint, T(SID_R_HINT), LR_MUTED);
     MkButton(p, IDC_R_BOOST, 0, 476, 200, 34, SID_R_BOOST);
     MkButton(p, IDC_R_RAM, 210, 476, 200, 34, SID_R_RAMFOCUS);
     MkButton(p, IDC_R_RESTORE, 420, 476, 200, 34, SID_R_RESTORE);
     MkButton(p, IDC_R_REFRESH, 630, 476, 170, 34, SID_BTN_REFRESH);
     hProcStatus = MkLabel(p, 0, 518, 860, 24);
-    SetLabel(hProcStatus, T(SID_STATUS_READY), COL_MUTED);
+    SetLabel(hProcStatus, T(SID_STATUS_READY), LR_MUTED);
+}
+
+// ---------- Theme apply (live) ----------
+static void Theme_ApplyLists() {
+    for (size_t i = 0; i < g_lvWins.size(); i++) {
+        HWND l = g_lvWins[i];
+        if (!IsWindow(l)) continue;
+        ListView_SetBkColor(l, COL_PANEL);
+        ListView_SetTextColor(l, COL_TEXT);
+        ListView_SetTextBkColor(l, COL_PANEL);
+        InvalidateRect(l, NULL, TRUE);
+    }
+}
+static void Theme_MakeBrushes() {
+    if (hBrBg) DeleteObject(hBrBg);
+    if (hBrPanel) DeleteObject(hBrPanel);
+    if (hBrSide) DeleteObject(hBrSide);
+    if (hBrCard) DeleteObject(hBrCard);
+    if (hBrEdit) DeleteObject(hBrEdit);
+    hBrBg = CreateSolidBrush(COL_BG);
+    hBrPanel = CreateSolidBrush(COL_PANEL);
+    hBrSide = CreateSolidBrush(COL_SIDE);
+    hBrCard = CreateSolidBrush(COL_CARD);
+    hBrEdit = CreateSolidBrush(COL_EDIT);
+}
+static void Theme_ApplyClasses() {
+    if (g_hMain) SetClassLongPtrW(g_hMain, GCLP_HBRBACKGROUND, (LONG_PTR)hBrBg);
+    if (hSide) SetClassLongPtrW(hSide, GCLP_HBRBACKGROUND, (LONG_PTR)hBrSide);
+    for (int i = 0; i < PAGE_COUNT; i++)
+        if (g_hPages[i]) SetClassLongPtrW(g_hPages[i], GCLP_HBRBACKGROUND, (LONG_PTR)hBrPanel);
+}
+static void Theme_UpdateBtnFace() {
+    if (!hThemeBtn) return;
+    SetWindowTextW(hThemeBtn, (g_themeMode == 2) ? L"\U0001F317" : (g_theme.dark ? L"\U0001F319" : L"\u2600\uFE0F"));
+}
+static void Theme_ApplyAll() {
+    Theme_Resolve();
+    Theme_MakeBrushes();
+    Theme_ApplyClasses();
+    Theme_ApplyLists();
+    Theme_UpdateBtnFace();
+    if (g_hMain) InvalidateRect(g_hMain, NULL, TRUE);
+}
+static void Hotkey_Apply() {
+    if (!g_hMain) return;
+    UnregisterHotKey(g_hMain, HOTKEY_BOOST_ID);
+    if (g_hotkey) RegisterHotKey(g_hMain, HOTKEY_BOOST_ID, MOD_CONTROL | MOD_ALT, 'B');
 }
 
 // ---------- Page management ----------
@@ -964,6 +1151,7 @@ void UI_ShowPage(int page) {
     case PAGE_SYSTEM: SysRefresh(); break;
     case PAGE_POWER: PowRefresh(); break;
     case PAGE_NET: NetRefresh(); break;
+    case PAGE_SETTINGS: SettingsRefresh(); break;
     }
 }
 void UI_RefreshAll() {
@@ -998,21 +1186,21 @@ void UI_TrayShow(bool show) {
 void UI_GameEvent(int phase, const wchar_t* info) {
     switch (phase) {
     case GPH_PREP:
-        SetLabel(hGamesStatus, T(SID_G_PREP), COL_YELLOW);
+        SetLabel(hGamesStatus, T(SID_G_PREP), LR_YELLOW);
         EnableWindow(hGamesLaunch, FALSE);
         break;
     case GPH_LAUNCHED:
     case GPH_INGAME:
-        SetLabel(hGamesStatus, T(SID_G_RUNNING), COL_GREEN);
+        SetLabel(hGamesStatus, T(SID_G_RUNNING), LR_GREEN);
         GamesFillList();
         break;
     case GPH_DONE:
-        SetLabel(hGamesStatus, T(SID_G_DONE), COL_TEXT);
+        SetLabel(hGamesStatus, T(SID_G_DONE), LR_TEXT);
         EnableWindow(hGamesLaunch, TRUE);
         GamesFillList();
         break;
     case GPH_ERROR:
-        SetLabel(hGamesStatus, T(SID_MSG_FAIL), COL_RED);
+        SetLabel(hGamesStatus, T(SID_MSG_FAIL), LR_RED);
         EnableWindow(hGamesLaunch, TRUE);
         break;
     }
@@ -1038,7 +1226,8 @@ static void DrawProg(const DRAWITEMSTRUCT* d) {
     track.AddArc(r.right - rad * 2 - 1, r.bottom - S(2) - rad * 2, rad * 2, rad * 2, 0, 90);
     track.AddArc(r.left, r.bottom - S(2) - rad * 2, rad * 2, rad * 2, 90, 90);
     track.CloseFigure();
-    SolidBrush tbr(Color(255, 10, 14, 26));
+    COLORREF trackC = g_theme.dark ? COL_EDIT : RGB(216, 224, 234);
+    SolidBrush tbr(ThColor(255, trackC));
     g.FillPath(&tbr, &track);
     Pen edge(Color(255, 60, 80, 120), 1);
     g.DrawPath(&edge, &track);
@@ -1066,7 +1255,7 @@ static void DrawCombo(const DRAWITEMSTRUCT* d) {
     bool edit = (d->itemID == (UINT)-1);
     bool sel = !edit && (d->itemState & ODS_SELECTED) != 0;
     bool cdis = (d->itemState & ODS_DISABLED) != 0;
-    HBRUSH b = CreateSolidBrush(sel ? COL_SELBAR : RGB(10, 14, 26));
+    HBRUSH b = CreateSolidBrush(sel ? COL_SELBAR : COL_EDIT);
     FillRect(dc, &r, b);
     DeleteObject(b);
     if (edit) {
@@ -1079,7 +1268,7 @@ static void DrawCombo(const DRAWITEMSTRUCT* d) {
     else if (d->itemID != (UINT)-1) SendMessageW(d->hwndItem, CB_GETLBTEXT, d->itemID, (LPARAM)txt);
     RECT tr = r; tr.left += S(6); tr.right -= S(4);
     SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, cdis ? COL_MUTED : (sel ? RGB(255, 255, 255) : COL_TEXT));
+    SetTextColor(dc, cdis ? COL_MUTED : (sel ? (g_theme.dark ? RGB(255, 255, 255) : RGB(15, 23, 42)) : COL_TEXT));
     HFONT old = (HFONT)SelectObject(dc, g_hFont);
     DrawTextW(dc, txt, -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
     SelectObject(dc, old);
@@ -1129,13 +1318,15 @@ static void DrawNav(const DRAWITEMSTRUCT* d) {
     MapWindowPoints(d->hwndItem, GetParent(d->hwndItem), &pt, 1);
     int ph = pr.bottom > 1 ? pr.bottom : 1;
     int tt = (pt.y * 255) / ph;
-    HBRUSH bg = CreateSolidBrush(RGB(6 + 5 * tt / 255, 9 + 8 * tt / 255, 20 + 16 * tt / 255));
+    int br0 = GetRValue(g_theme.side), bg0 = GetGValue(g_theme.side), bb0 = GetBValue(g_theme.side);
+    int br1 = GetRValue(g_theme.side2), bg1 = GetGValue(g_theme.side2), bb1 = GetBValue(g_theme.side2);
+    HBRUSH bg = CreateSolidBrush(RGB(br0 + (br1 - br0) * tt / 255, bg0 + (bg1 - bg0) * tt / 255, bb0 + (bb1 - bb0) * tt / 255));
     FillRect(dc, &r, bg);
     DeleteObject(bg);
     if (sel) {
         Graphics g(dc);
         g.SetSmoothingMode(SmoothingModeAntiAlias);
-        SolidBrush pill(Color(56, 34, 211, 238));
+        SolidBrush pill(ThColor(g_theme.dark ? (BYTE)56 : (BYTE)70, g_theme.accent));
         int L = r.left + S(2), T = r.top + S(3), R = r.right - S(2), B = r.bottom - S(3);
         int rad = (B - T) / 2 - S(2);
         if (rad < S(4)) rad = S(4);
@@ -1153,7 +1344,7 @@ static void DrawNav(const DRAWITEMSTRUCT* d) {
     }
     // dot
     RECT dot = {r.left + S(18), (r.top + r.bottom - S(8)) / 2, r.left + S(26), (r.top + r.bottom + S(8)) / 2};
-    HBRUSH db = CreateSolidBrush(sel ? COL_ACCENT : RGB(80, 90, 120));
+    HBRUSH db = CreateSolidBrush(sel ? COL_ACCENT : COL_MUTED);
     HBRUSH ob = (HBRUSH)SelectObject(dc, db);
     HPEN op = (HPEN)SelectObject(dc, GetStockObject(NULL_PEN));
     Ellipse(dc, dot.left, dot.top, dot.right, dot.bottom);
@@ -1177,7 +1368,7 @@ static void DrawCheckBtn(const DRAWITEMSTRUCT* d) {
     bool cdis = (d->itemState & ODS_DISABLED) != 0;
     int bs = S(18);
     RECT box = {r.left, (r.top + r.bottom - bs) / 2, r.left + bs, (r.top + r.bottom + bs) / 2};
-    HBRUSH bb = CreateSolidBrush(checked && !cdis ? COL_SELBAR : RGB(10, 14, 26));
+    HBRUSH bb = CreateSolidBrush(checked && !cdis ? COL_SELBAR : COL_EDIT);
     FillRect(dc, &box, bb);
     DeleteObject(bb);
     HBRUSH fb = CreateSolidBrush(cdis ? RGB(90, 100, 130) : (checked ? COL_ACCENT : RGB(120, 140, 175)));
@@ -1212,13 +1403,15 @@ static void DrawGraph(const DRAWITEMSTRUCT* d) {
     Graphics g(dc);
     g.SetSmoothingMode(SmoothingModeAntiAlias);
     int W = r.right - r.left, H = r.bottom - r.top;
-    Pen grid(Color(60, 50, 70, 110), 1);
+    COLORREF cpuC = g_theme.dark ? RGB(34, 211, 238) : RGB(2, 132, 199);
+    COLORREF ramC = g_theme.dark ? RGB(232, 121, 249) : RGB(192, 38, 211);
+    Pen grid(g_theme.dark ? Color(60, 50, 70, 110) : Color(60, 148, 163, 184), 1);
     for (int i = 1; i < 4; i++) {
         int y = r.top + H * i / 4;
         g.DrawLine(&grid, r.left, y, r.right, y);
     }
     if (g_histN > 1) {
-        Pen pCpu(Color(255, 34, 211, 238), 2), pRam(Color(255, 232, 121, 249), 2);
+        Pen pCpu(ThColor(255, cpuC), 2), pRam(ThColor(255, ramC), 2);
         for (int s = 0; s < 2; s++) {
             const int* h = s ? g_ramHist : g_cpuHist;
             Point* pts = new Point[g_histN];
@@ -1236,10 +1429,10 @@ static void DrawGraph(const DRAWITEMSTRUCT* d) {
     }
     SetBkMode(dc, TRANSPARENT);
     HFONT old = (HFONT)SelectObject(dc, g_hFont);
-    SetTextColor(dc, COL_ACCENT);
+    SetTextColor(dc, cpuC);
     RECT l1 = {r.left + 8, r.top + 6, r.left + 200, r.top + 28};
     DrawTextW(dc, WFormat(L"CPU %d%%", g_histN ? g_cpuHist[g_histN-1] : 0).c_str(), -1, &l1, DT_LEFT);
-    SetTextColor(dc, COL_ACCENT2);
+    SetTextColor(dc, ramC);
     RECT l2 = {r.left + 8, r.top + 28, r.left + 200, r.top + 50};
     DrawTextW(dc, WFormat(L"RAM %d%%", g_histN ? g_ramHist[g_histN-1] : 0).c_str(), -1, &l2, DT_LEFT);
     SelectObject(dc, old);
@@ -1314,21 +1507,111 @@ static void DoAddGame() {
 }
 static void SetLangAndAsk(int lang) {
     if (lang == Strings_GetLang()) return;
+    if (g_boosting || g_inGame || Games_IsBusy()) return;
     Strings_SetLang(lang);
     Settings_Save();
-    MessageBoxW(g_hMain, T(SID_SET_RESTART_LANG), T(SID_APP_NAME), MB_OK | MB_ICONINFORMATION);
+    Games_Save();
+    BackupSave();
+    // relaunch into the new language (release the mutex so the new instance starts)
+    if (g_mutex) { ReleaseMutex(g_mutex); CloseHandle(g_mutex); g_mutex = NULL; }
+    wchar_t exe[MAX_PATH];
+    GetModuleFileNameW(NULL, exe, MAX_PATH);
+    HINSTANCE rr = ShellExecuteW(NULL, L"open", exe, NULL, NULL, SW_SHOWNORMAL);
+    if ((INT_PTR)rr <= 32) {
+        g_mutex = CreateMutexW(NULL, TRUE, APP_MUTEX); // relaunch failed: stay running
+    } else {
+        DestroyWindow(g_hMain);
+    }
+}
+
+// ---------- Update check (GitHub releases) ----------
+static LONG g_updBusy = 0;
+static bool VerNewer(const std::wstring& tag) {
+    size_t i = 0;
+    while (i < tag.size() && (tag[i] == L'v' || tag[i] == L'V' || tag[i] == L' ')) i++;
+    int tn[3] = {0, 0, 0}, an[3] = {0, 0, 0};
+    swscanf(tag.c_str() + i, L"%d.%d.%d", &tn[0], &tn[1], &tn[2]);
+    swscanf(APP_VER, L"%d.%d.%d", &an[0], &an[1], &an[2]);
+    for (int k = 0; k < 3; k++) {
+        if (tn[k] != an[k]) return tn[k] > an[k];
+    }
+    return false;
+}
+static DWORD WINAPI UpdateThread(LPVOID arg) {
+    HWND w = (HWND)arg;
+    int code = 0; // 0 fail, 1 latest, 2 new version
+    std::wstring ver;
+    HINTERNET hs = WinHttpOpen(L"FPSBooster/2.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+        WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (hs) {
+        WinHttpSetTimeouts(hs, 8000, 8000, 8000, 15000);
+        HINTERNET hc = WinHttpConnect(hs, L"api.github.com", INTERNET_DEFAULT_HTTPS_PORT, 0);
+        if (hc) {
+            HINTERNET hr = WinHttpOpenRequest(hc, L"GET",
+                L"/repos/amirragaby110-glitch/fps-boost/releases/latest",
+                NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
+            if (hr) {
+                WinHttpAddRequestHeaders(hr, L"User-Agent: FPSBooster", (ULONG)-1, WINHTTP_ADDREQ_FLAG_ADD);
+                if (WinHttpSendRequest(hr, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) &&
+                    WinHttpReceiveResponse(hr, NULL)) {
+                    std::string body;
+                    DWORD av = 0, rd = 0;
+                    char buf[4096];
+                    while (WinHttpQueryDataAvailable(hr, &av) && av > 0) {
+                        DWORD chunk = av > sizeof(buf) ? sizeof(buf) : av;
+                        if (!WinHttpReadData(hr, buf, chunk, &rd) || rd == 0) break;
+                        body.append(buf, rd);
+                        if (body.size() > 65536) break;
+                    }
+                    std::wstring wb = Utf8ToWide(body.c_str());
+                    size_t q = wb.find(L"\"tag_name\"");
+                    if (q != std::wstring::npos) {
+                        size_t q1 = wb.find(L'"', q + 10);
+                        size_t q2 = q1 == std::wstring::npos ? q1 : wb.find(L'"', q1 + 1);
+                        if (q1 != std::wstring::npos && q2 != std::wstring::npos) {
+                            ver = wb.substr(q1 + 1, q2 - q1 - 1);
+                            code = VerNewer(ver) ? 2 : 1;
+                        }
+                    }
+                }
+                WinHttpCloseHandle(hr);
+            }
+            WinHttpCloseHandle(hc);
+        }
+        WinHttpCloseHandle(hs);
+    }
+    wchar_t* out = NULL;
+    if (!ver.empty()) {
+        out = new wchar_t[ver.size() + 1];
+        StringCchCopyW(out, ver.size() + 1, ver.c_str());
+    }
+    if (IsWindow(w)) PostMessageW(w, WM_APP_UPDATE, (WPARAM)code, (LPARAM)out);
+    else if (out) delete[] out;
+    InterlockedExchange(&g_updBusy, 0);
+    return 0;
+}
+static void Update_CheckAsync(HWND w) {
+    if (InterlockedCompareExchange(&g_updBusy, 1, 0) != 0) return;
+    HANDLE th = CreateThread(NULL, 0, UpdateThread, w, 0, NULL);
+    if (th) CloseHandle(th);
+    else InterlockedExchange(&g_updBusy, 0);
 }
 
 LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     switch (m) {
+    case WM_ERASEBKGND: {
+        RECT r; GetClientRect(h, &r);
+        PaintPageBg((HDC)w, r.right - r.left, r.bottom - r.top);
+        return 1;
+    }
     case WM_CTLCOLORSTATIC: {
         HDC dc = (HDC)w;
         HWND c = (HWND)l;
         SetBkMode(dc, TRANSPARENT);
-        COLORREF col = COL_TEXT;
+        int role = LR_TEXT;
         for (size_t i = 0; i < g_colors.size(); i++)
-            if (g_colors[i].h == c) { col = g_colors[i].c; break; }
-        SetTextColor(dc, col);
+            if (g_colors[i].h == c) { role = g_colors[i].role; break; }
+        SetTextColor(dc, RoleColor(role));
         return (LRESULT)hBrPanel;
     }
     case WM_CTLCOLOREDIT:
@@ -1336,7 +1619,7 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         HDC dc = (HDC)w;
         SetBkMode(dc, OPAQUE);
         SetTextColor(dc, COL_TEXT);
-        SetBkColor(dc, RGB(10, 14, 26));
+        SetBkColor(dc, COL_EDIT);
         return (LRESULT)hBrEdit;
     }
     case WM_MEASUREITEM: {
@@ -1365,6 +1648,11 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         case IDC_LANG_BTN:
             SetLangAndAsk(Strings_GetLang() == 1 ? 0 : 1);
             break;
+        case IDC_THEME_BTN:
+            g_themeMode = (g_themeMode == 0) ? 1 : 0;
+            Settings_Save();
+            Theme_ApplyAll();
+            break;
         case IDC_DASH_BOOST:
             UI_ShowPage(PAGE_BOOST);
             break;
@@ -1390,8 +1678,8 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
                 Settings_Save();
                 if (g_autoBoost) AutoBoostStart(g_hMain);
                 else AutoBoostStop();
-                if (g_autoBoost) SetLabel(hGamesAutoSt, T(SID_G_AUTO_WATCH), COL_MUTED);
-                else SetLabel(hGamesAutoSt, L"", COL_MUTED);
+                if (g_autoBoost) SetLabel(hGamesAutoSt, T(SID_G_AUTO_WATCH), LR_MUTED);
+                else SetLabel(hGamesAutoSt, L"", LR_MUTED);
             }
             break;
         case IDC_G_GPUPREF: case IDC_G_FSO: case IDC_G_TIMER: case IDC_G_POWER:
@@ -1420,25 +1708,25 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         case IDC_R_REFRESH: ProcFillList(); break;
         case IDC_R_BOOST: {
             DWORD pid = ProcSelectedPid();
-            if (!pid) { SetLabel(hProcStatus, T(SID_R_HINT), COL_YELLOW); break; }
+            if (!pid) { SetLabel(hProcStatus, T(SID_R_HINT), LR_YELLOW); break; }
             std::wstring m; bool ok = Proc_Boost(pid, m);
-            SetLabel(hProcStatus, m, ok ? COL_GREEN : COL_RED);
+            SetLabel(hProcStatus, m, ok ? LR_GREEN : LR_RED);
             ProcFillList();
             break;
         }
         case IDC_R_RAM: {
             DWORD pid = ProcSelectedPid();
-            if (!pid) { SetLabel(hProcStatus, T(SID_R_HINT), COL_YELLOW); break; }
+            if (!pid) { SetLabel(hProcStatus, T(SID_R_HINT), LR_YELLOW); break; }
             std::wstring m; bool ok = Proc_RamFocus(pid, m);
-            SetLabel(hProcStatus, m, ok ? COL_GREEN : COL_RED);
+            SetLabel(hProcStatus, m, ok ? LR_GREEN : LR_RED);
             ProcFillList();
             break;
         }
         case IDC_R_RESTORE: {
             DWORD pid = ProcSelectedPid();
-            if (!pid) { SetLabel(hProcStatus, T(SID_R_HINT), COL_YELLOW); break; }
+            if (!pid) { SetLabel(hProcStatus, T(SID_R_HINT), LR_YELLOW); break; }
             bool ok = Proc_Restore(pid);
-            SetLabel(hProcStatus, WFormat(L"%u - %s", pid, T(SID_BTN_REVERT)), ok ? COL_GREEN : COL_RED);
+            SetLabel(hProcStatus, WFormat(L"%u - %s", pid, T(SID_BTN_REVERT)), ok ? LR_GREEN : LR_RED);
             ProcFillList();
             break;
         }
@@ -1566,6 +1854,34 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             if (code == CBN_SELCHANGE)
                 SetLangAndAsk((int)SendMessageW(hSetLang, CB_GETCURSEL, 0, 0));
             break;
+        case IDC_SET_THEME:
+            if (code == CBN_SELCHANGE) {
+                g_themeMode = (int)SendMessageW(hSetTheme, CB_GETCURSEL, 0, 0);
+                if (g_themeMode < 0 || g_themeMode > 2) g_themeMode = 2;
+                Settings_Save();
+                Theme_ApplyAll();
+            }
+            break;
+        case IDC_SET_ACCENT:
+            if (code == CBN_SELCHANGE) {
+                g_accent = (int)SendMessageW(hSetAccent, CB_GETCURSEL, 0, 0);
+                if (g_accent < 0 || g_accent > 3) g_accent = 0;
+                Settings_Save();
+                Theme_ApplyAll();
+            }
+            break;
+        case IDC_SET_HOTKEY:
+            if (code == BN_CLICKED) {
+                SetChecked(hSetHotkey, !IsChecked(hSetHotkey));
+                InvalidateRect(hSetHotkey, NULL, TRUE);
+                g_hotkey = IsChecked(hSetHotkey);
+                Settings_Save();
+                Hotkey_Apply();
+            }
+            break;
+        case IDC_SET_UPDATE:
+            Update_CheckAsync(g_hMain);
+            break;
         case IDC_SET_TRAY:
             if (code == BN_CLICKED) {
                 SetChecked(hSetTray, !IsChecked(hSetTray));
@@ -1634,11 +1950,11 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             break;
         case IDC_N_START:
             if (!NetTestBusy()) {
-                SetLabel(hNetStatus, T(SID_N_TESTING), COL_YELLOW);
-                SetLabel(hNetPing, WFormat(L"%s: ...", T(SID_N_PING)), COL_TEXT);
-                SetLabel(hNetDown, WFormat(L"%s: ...", T(SID_N_DOWN)), COL_TEXT);
-                SetLabel(hNetUp, WFormat(L"%s: ...", T(SID_N_UP)), COL_TEXT);
-                SetLabel(hNetGrade, WFormat(L"%s: --", T(SID_N_GRADE)), COL_TEXT);
+                SetLabel(hNetStatus, T(SID_N_TESTING), LR_YELLOW);
+                SetLabel(hNetPing, WFormat(L"%s: ...", T(SID_N_PING)), LR_TEXT);
+                SetLabel(hNetDown, WFormat(L"%s: ...", T(SID_N_DOWN)), LR_TEXT);
+                SetLabel(hNetUp, WFormat(L"%s: ...", T(SID_N_UP)), LR_TEXT);
+                SetLabel(hNetGrade, WFormat(L"%s: --", T(SID_N_GRADE)), LR_TEXT);
                 ProgSet(hNetProg, 0);
                 EnableWindow(hNetStart, FALSE);
                 EnableWindow(hNetCancel, TRUE);
@@ -1652,11 +1968,11 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             int si = (int)SendMessageW(hNetDns, CB_GETCURSEL, 0, 0);
             if (si >= 0 && si <= 5) {
                 DnsPingCancel();
-                if (DnsSetPreset(si)) SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_GREEN);
+                if (DnsSetPreset(si)) SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), LR_GREEN);
             } else if (si == 6) {
                 wchar_t d1[64], d2[64]; d1[0] = 0; d2[0] = 0;
                 GetWindowTextW(hNetC1, d1, 64); GetWindowTextW(hNetC2, d2, 64);
-                if (DnsSetCustom(d1, d2)) SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_GREEN);
+                if (DnsSetCustom(d1, d2)) SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), LR_GREEN);
             }
             break;
         }
@@ -1674,7 +1990,7 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
                 if (g_dnsPingMs[i] >= 0 && (bi < 0 || g_dnsPingMs[i] < g_dnsPingMs[bi])) bi = i;
             if (bi >= 0) {
                 SendMessageW(hNetDns, CB_SETCURSEL, bi + 1, 0);
-                if (DnsSetPreset(bi + 1)) SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_GREEN);
+                if (DnsSetPreset(bi + 1)) SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), LR_GREEN);
             }
             break;
         }
@@ -1683,7 +1999,7 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             GetWindowTextW(hNetC1, d1, 64); GetWindowTextW(hNetC2, d2, 64);
             if (DnsSetCustom(d1, d2)) {
                 SendMessageW(hNetDns, CB_SETCURSEL, 6, 0);
-                SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), COL_GREEN);
+                SetLabel(hNetDnsSt, WFormat(L"%s %s", T(SID_N_DNS_CUR), DnsCurrent().c_str()), LR_GREEN);
             }
             break;
         }
@@ -1723,7 +2039,7 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
                 case CDDS_PREPAINT: return CDRF_NOTIFYITEMDRAW;
                 case CDDS_ITEMPREPAINT: {
                     bool sel = (cd->nmcd.uItemState & CDIS_SELECTED) != 0;
-                    if (sel) { cd->clrText = RGB(255,255,255); cd->clrTextBk = COL_SELBAR; }
+                    if (sel) { cd->clrText = g_theme.dark ? RGB(255,255,255) : RGB(15,23,42); cd->clrTextBk = COL_SELBAR; }
                     else {
                         cd->clrText = COL_TEXT;
                         cd->clrTextBk = (cd->nmcd.dwItemSpec % 2) ? COL_ROWALT : COL_PANEL;
@@ -1747,7 +2063,7 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
                     c.mask = LVCF_TEXT; c.pszText = txt; c.cchTextMax = 128;
                     ListView_GetColumn(lv, (int)cd->nmcd.dwItemSpec, &c);
                     SetBkMode(dc, TRANSPARENT);
-                    SetTextColor(dc, COL_ACCENT);
+                    SetTextColor(dc, RoleColor(LR_ACCENT));
                     HFONT old = (HFONT)SelectObject(dc, g_hFont);
                     r.left += 6;
                     DrawTextW(dc, txt, -1, &r, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
@@ -1789,36 +2105,36 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     }
     case WM_APP_NET: {
         int phase = (int)w;
-        if (phase == 0) SetLabel(hNetPing, WFormat(L"%s: %d ms", T(SID_N_PING), (int)l), COL_GREEN);
+        if (phase == 0) SetLabel(hNetPing, WFormat(L"%s: %d ms", T(SID_N_PING), (int)l), LR_GREEN);
         else if (phase == 1) {
             double* d = (double*)l;
-            if (d) { SetLabel(hNetDown, WFormat(L"%s: %.1f Mbps", T(SID_N_DOWN), *d), COL_TEXT); delete d; }
+            if (d) { SetLabel(hNetDown, WFormat(L"%s: %.1f Mbps", T(SID_N_DOWN), *d), LR_TEXT); delete d; }
             ProgSet(hNetProg, 30);
         }
         else if (phase == 2) ProgSet(hNetProg, 55);
         else if (phase == 3) {
             double* d = (double*)l;
-            if (d) { SetLabel(hNetUp, WFormat(L"%s: %.1f Mbps", T(SID_N_UP), *d), COL_TEXT); delete d; }
+            if (d) { SetLabel(hNetUp, WFormat(L"%s: %.1f Mbps", T(SID_N_UP), *d), LR_TEXT); delete d; }
             ProgSet(hNetProg, 80);
         }
         else if (phase == 4) ProgSet(hNetProg, 90);
         else if (phase == 5) {
             wchar_t* ip = (wchar_t*)l;
-            if (ip) { SetLabel(hNetIp, WFormat(L"%s: %s", T(SID_N_IP), ip), COL_TEXT); delete[] ip; }
+            if (ip) { SetLabel(hNetIp, WFormat(L"%s: %s", T(SID_N_IP), ip), LR_TEXT); delete[] ip; }
         }
         else if (phase == 6) {
             static StrId g[] = {SID_N_GR0, SID_N_GR1, SID_N_GR2, SID_N_GR3};
-            static COLORREF c[] = {COL_GREEN, COL_GREEN, COL_YELLOW, COL_RED};
+            static int c[] = {LR_GREEN, LR_GREEN, LR_YELLOW, LR_RED};
             int gi = (int)l;
             if (gi < 0) gi = 0; if (gi > 3) gi = 3;
             SetLabel(hNetGrade, WFormat(L"%s: %s", T(SID_N_GRADE), T(g[gi])), c[gi]);
-            SetLabel(hNetStatus, T(SID_B_DONE), COL_GREEN);
+            SetLabel(hNetStatus, T(SID_B_DONE), LR_GREEN);
             ProgSet(hNetProg, 100);
             EnableWindow(hNetStart, TRUE);
             EnableWindow(hNetCancel, FALSE);
         }
         else if (phase == 7) {
-            SetLabel(hNetStatus, T(SID_N_ERR), COL_RED);
+            SetLabel(hNetStatus, T(SID_N_ERR), LR_RED);
             EnableWindow(hNetStart, TRUE);
             EnableWindow(hNetCancel, FALSE);
         }
@@ -1853,8 +2169,8 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     case WM_APP_AUTO: {
         wchar_t* names = (wchar_t*)l;
         int count = (int)w;
-        if (count <= 0) SetLabel(hGamesAutoSt, T(SID_G_AUTO_WATCH), COL_MUTED);
-        else SetLabel(hGamesAutoSt, WFormat(L"%s %s", T(SID_G_AUTO_BOOST), names ? names : L""), COL_GREEN);
+        if (count <= 0) SetLabel(hGamesAutoSt, T(SID_G_AUTO_WATCH), LR_MUTED);
+        else SetLabel(hGamesAutoSt, WFormat(L"%s %s", T(SID_G_AUTO_BOOST), names ? names : L""), LR_GREEN);
         if (names) delete[] names;
         break;
     }
@@ -1875,6 +2191,26 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     case WM_APP_AI:
         AiOnlineDone(w == 1);
         break;
+    case WM_APP_UPDATE: {
+        wchar_t* v = (wchar_t*)l;
+        int ucode = (int)w;
+        if (ucode == 2 && v) MessageBoxW(h, WFormat(T(SID_UPD_NEW), v).c_str(), T(SID_APP_NAME), MB_OK | MB_ICONINFORMATION);
+        else if (ucode == 1) MessageBoxW(h, WFormat(T(SID_UPD_LATEST), T(SID_VER)).c_str(), T(SID_APP_NAME), MB_OK | MB_ICONINFORMATION);
+        else MessageBoxW(h, T(SID_UPD_FAIL), T(SID_APP_NAME), MB_OK | MB_ICONWARNING);
+        if (v) delete[] v;
+        break;
+    }
+    case WM_HOTKEY:
+        if (w == HOTKEY_BOOST_ID) {
+            UI_TrayShow(true);
+            UI_ShowPage(PAGE_BOOST);
+            SendMessageW(h, WM_COMMAND, MAKEWPARAM(IDC_B_START, BN_CLICKED), 0);
+        }
+        break;
+    case WM_SETTINGCHANGE:
+        if (g_themeMode == 2 && l && !wcscmp((LPCWSTR)l, L"ImmersiveColorSet"))
+            Theme_ApplyAll();
+        break;
     case WM_TIMER:
         if (w == 1 && g_page == PAGE_SYSTEM) SysRefresh();
         break;
@@ -1882,7 +2218,8 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         int W = LOWORD(l), H = HIWORD(l);
         if (!hSide) break;
         MoveWindow(hSide, 0, 0, S(240), H, TRUE);
-        MoveWindow(hTitle, S(264), S(14), W - S(264) - S(300), S(34), TRUE);
+        MoveWindow(hTitle, S(264), S(14), W - S(264) - S(410), S(34), TRUE);
+        MoveWindow(hThemeBtn, W - S(386), S(12), S(110), S(32), TRUE);
         MoveWindow(hLangBtn, W - S(268), S(12), S(120), S(32), TRUE);
         MoveWindow(hAdminBadge, W - S(140), S(12), S(128), S(32), TRUE);
         MoveWindow(hStatusBar, S(240), H - S(30), W - S(240), S(30), TRUE);
@@ -1966,11 +2303,8 @@ bool UI_Create(HINSTANCE hInst) {
     if (g_scale < 96) g_scale = 96;
     if (g_scale > 288) g_scale = 288;
 
-    hBrBg = CreateSolidBrush(COL_BG);
-    hBrPanel = CreateSolidBrush(COL_PANEL);
-    hBrSide = CreateSolidBrush(COL_SIDE);
-    hBrCard = CreateSolidBrush(COL_CARD);
-    hBrEdit = CreateSolidBrush(RGB(10, 14, 26));
+    Theme_Resolve();
+    Theme_MakeBrushes();
 
     g_imgLogo = LoadPng(RES_PNG_LOGO);
     g_imgBanner = LoadPng(RES_PNG_BANNER);
@@ -2020,6 +2354,8 @@ bool UI_Create(HINSTANCE hInst) {
         264, 14, 600, 34, 0, g_hFontBig);
     hLangBtn = Mk(g_hMain, WC_BUTTONW, Strings_GetLang() == 1 ? L"فا" : L"EN",
         WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON, 0, 900, 12, 120, 32, IDC_LANG_BTN, g_hFont);
+    hThemeBtn = Mk(g_hMain, WC_BUTTONW, L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW, 0,
+        780, 12, 110, 32, IDC_THEME_BTN, g_hFontBig);
     hAdminBadge = Mk(g_hMain, WC_STATICW, L"", WS_CHILD | WS_VISIBLE | SS_RIGHT, 0,
         1030, 12, 128, 32, 0, g_hFont);
 
@@ -2041,11 +2377,13 @@ bool UI_Create(HINSTANCE hInst) {
 
     hStatusBar = Mk(g_hMain, WC_STATICW, T(SID_STATUS_READY), WS_CHILD | WS_VISIBLE | SS_LEFT, 0,
         240, 730, 900, 30, 0, g_hFont);
-    LabelColor(hTitle, COL_TEXT);
+    LabelColor(hTitle, LR_TEXT);
     SetLabel(hAdminBadge, WFormat(L"[%s]", g_isAdmin ? T(SID_ADMIN_OK) : T(SID_ADMIN_NO)),
-        g_isAdmin ? COL_GREEN : COL_RED);
+        g_isAdmin ? LR_GREEN : LR_RED);
 
     SetTimer(g_hMain, 1, 1000, NULL);
+    Hotkey_Apply();
+    Theme_UpdateBtnFace();
     UI_ShowPage(PAGE_DASH);
 
     // initial window position/size fix

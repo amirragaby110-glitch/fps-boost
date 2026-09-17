@@ -5,6 +5,7 @@
 // ---------- Globals ----------
 HINSTANCE   g_hInst = NULL;
 HWND        g_hMain = NULL;
+HANDLE      g_mutex = NULL;
 HWND        g_hPages[PAGE_COUNT] = {0};
 int         g_page = 0;
 std::wstring g_dataDir;
@@ -50,14 +51,14 @@ int main() {
     EnableDpiAwareness();
 
     // Single instance
-    HANDLE mtx = CreateMutexW(NULL, TRUE, APP_MUTEX);
+    g_mutex = CreateMutexW(NULL, TRUE, APP_MUTEX);
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
         HWND old = FindWindowW(L"FPSBoosterMain", NULL);
         if (old) {
             ShowWindow(old, SW_RESTORE);
             SetForegroundWindow(old);
         }
-        if (mtx) CloseHandle(mtx);
+        if (g_mutex) { CloseHandle(g_mutex); g_mutex = NULL; }
         return 0;
     }
 
@@ -131,7 +132,7 @@ int main() {
     UI_TrayRemove();
     if (gdipTok) Gdiplus::GdiplusShutdown(gdipTok);
     CoUninitialize();
-    if (mtx) CloseHandle(mtx);
+    if (g_mutex) { CloseHandle(g_mutex); g_mutex = NULL; }
     LogW(L"===== FPS Booster Pro exited =====");
     return (int)msg.wParam;
 }

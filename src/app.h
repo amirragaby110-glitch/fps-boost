@@ -1,6 +1,9 @@
 // FPS Booster Pro - Shared header
 #pragma once
 
+#define APP_VER L"2.0.0"
+#define HOTKEY_BOOST_ID 1
+
 #define UNICODE
 #define _UNICODE
 #define WIN32_LEAN_AND_MEAN
@@ -41,6 +44,7 @@
 #define WM_APP_NET        (WM_APP + 16)
 #define WM_APP_AUTO       (WM_APP + 17)
 #define WM_APP_AI         (WM_APP + 18)
+#define WM_APP_UPDATE     (WM_APP + 19)
 
 // Pages
 enum PageId { PAGE_DASH = 0, PAGE_AI, PAGE_GAMES, PAGE_PROC, PAGE_BOOST, PAGE_TWEAKS, PAGE_SYSTEM, PAGE_POWER, PAGE_NET, PAGE_HELP, PAGE_SETTINGS, PAGE_COUNT };
@@ -54,7 +58,7 @@ enum GamePhase { GPH_PREP = 1, GPH_LAUNCHED, GPH_INGAME, GPH_DONE, GPH_ERROR };
 // Control IDs
 enum CtrlId {
     IDC_NAV_BASE = 100,
-    IDC_LANG_BTN = 200,
+    IDC_LANG_BTN = 200, IDC_THEME_BTN,
     IDC_ADMIN_BADGE,
     // dashboard
     IDC_DASH_SCORE = 300, IDC_DASH_GRADE, IDC_DASH_SYS, IDC_DASH_STATUS,
@@ -81,6 +85,7 @@ enum CtrlId {
     IDC_SET_LANG = 900, IDC_SET_TRAY, IDC_SET_STARTUP,
     IDC_SET_FOLDER, IDC_SET_RESET, IDC_SET_ABOUT,
     IDC_SET_STLIST, IDC_SET_STEN, IDC_SET_STDIS,
+    IDC_SET_THEME, IDC_SET_ACCENT, IDC_SET_HOTKEY, IDC_SET_UPDATE,
     // power page
     IDC_P_PLAN = 950, IDC_P_REFRESH, IDC_P_BEAST, IDC_P_STATUS, IDC_P_LIST,
     IDC_P_APPLYALL, IDC_P_RESTORE, IDC_P_DELETE, IDC_P_NOTE,
@@ -139,6 +144,7 @@ struct Tweak {
 // ---------- Globals (main.cpp) ----------
 extern HINSTANCE   g_hInst;
 extern HWND        g_hMain;
+extern HANDLE g_mutex;
 extern HWND        g_hPages[PAGE_COUNT];
 extern int         g_page;
 extern std::wstring g_dataDir;

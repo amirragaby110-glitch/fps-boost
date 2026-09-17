@@ -153,12 +153,25 @@ static DWORD WINAPI MaxThread(LPVOID arg) {
         kill.push_back(L"Skype.exe");
         int killed = KillProcessesByNames(kill);
         MLog(w, L"  %d closed", killed);
+        // foreground game boost: priority + RAM focus on the game window
+        MProg(w, 81); MLog(w, T(SID_M_GAME));
+        DWORD fpid = 0;
+        HWND fg = GetForegroundWindow();
+        DWORD fgPid = 0;
+        if (fg) GetWindowThreadProcessId(fg, &fgPid);
+        if (fgPid && fgPid != GetCurrentProcessId()) {
+            std::wstring bm, rm;
+            if (Proc_Boost(fgPid, bm)) { MLog(w, L"  [+] PID %u", fgPid); fpid = fgPid; }
+            if (fpid && Proc_RamFocus(fgPid, rm)) MLog(w, L"  %s", rm.c_str());
+            if (!fpid) MLog(w, L"  [=]");
+        } else MLog(w, L"  [=]");
         // junk + ram + refresh
         MProg(w, 84); MLog(w, T(SID_B_STEP_TEMP));
         unsigned long long freedBytes = CleanJunkFiles();
         MLog(w, L"  %s: %.1f MB", T(SID_S_FREED), (double)freedBytes / 1048576.0);
         MProg(w, 88); MLog(w, T(SID_B_STEP_RAM));
         MLog(w, L"  %s", PurgeStandbyList() ? L"[OK]" : L"(partial)");
+        MLog(w, L"  %d trimmed", Proc_TrimAll());
         MProg(w, 91); MLog(w, T(SID_B_STEP_DISP));
         int hz = SetMaxRefreshRate();
         if (hz > 0) MLog(w, L"  %s %dHz", T(SID_S_REFRESH_DONE), hz);
@@ -177,8 +190,8 @@ static DWORD WINAPI MaxThread(LPVOID arg) {
         else MLog(w, L"  [=] %dx%d", cw, ch);
         // save state
         char nb[512];
-        snprintf(nb, 512, "{\"active\":1,\"timer\":%lu,\"resw\":%d,\"resh\":%d,\"beast\":%d,\"svc\":\"",
-            timerSet ? timerPrev : 0, rw, rh, beastOn ? 1 : 0);
+        snprintf(nb, 512, "{\"active\":1,\"timer\":%lu,\"resw\":%d,\"resh\":%d,\"beast\":%d,\"fpid\":%u,\"svc\":\"",
+            timerSet ? timerPrev : 0, rw, rh, beastOn ? 1 : 0, fpid);
         std::string j = nb;
         for (size_t i = 0; i < svcs.size(); i++) {
             if (i) j += ";";
@@ -215,6 +228,11 @@ static DWORD WINAPI MaxThread(LPVOID arg) {
         // timer restore
         ULONG tp = (ULONG)root.num("timer", 0);
         if (tp) TimerRestore(tp);
+        DWORD fp = (DWORD)root.num("fpid", 0);
+        if (fp) {
+            if (Proc_Restore(fp)) MLog(w, L"  [+] game");
+            else MLog(w, L"  [X] game");
+        }
         // services restore
         std::wstring ss = root.wstr("svc");
         size_t p = 0;

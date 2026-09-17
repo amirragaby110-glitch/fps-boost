@@ -28,6 +28,7 @@ Everything is **backed up and reversible**, with an automatic **restore point** 
 - 📦 **Setup installer**: `FPSBooster-Setup-v1.4.exe` (100 MB) — wizard with license, folder choice, shortcuts, silent `/S` install, full uninstaller + Add/Remove Programs entry
 - 🐛 **Bug fixes**: settings (language/Beast/auto-boost) now actually persist — fixed malformed settings.json; hardened startup-manager buffers
 - ⚡ **v1.5 reliability**: fixed resource-tree bug (icon/logo/manifest now load correctly), real PE checksums, new ⚡FPS logo + banner, strict `tools/audit_pe.py` loader-conformance validator
+- 🌐 **v1.7 online AI + MAXIMUM**: keyless online AI answers (auto offline/online routing), 5 new max tweaks (Nagle, responsiveness, VBS...), MAX mode boosts foreground game + trims RAM
 - 🤖 **v1.6 AI + processes**: offline AI advisor (can-I-run-it verdicts in EN/FA for 120+ games), Live Processes page (boost priority + RAM Focus), new dark neon background + sidebar theme, 4 new FPS tweaks (FSO-global, timer-res, mitigations, Xbox services)
 - 🛡️ Restore point + full backup (`backup.json`) + one-click **Undo everything**
 
@@ -152,6 +153,7 @@ MIT — see [LICENSE](LICENSE).
 - 📋 **کپی مشخصات**: نمایش GPU در صفحه سیستم + کپی مشخصات کامل سیستم با یک کلیک
 - 📦 **فایل نصب (Setup)**: `FPSBooster-Setup-v1.4.exe` (۱۰۰ مگابایت) — ویزارد نصب با لایسنس، انتخاب پوشه، میانبرها، نصب سایلنت با `/S`، حذف کامل + ثبت در Add/Remove Programs
 - 🐛 **رفع باگ**: تنظیمات (زبان/Beast/بوست خودکار) حالا واقعا ذخیره می‌مانند — فایل خراب settings.json درست شد
+- 🌐 **هوش آنلاین و ماکسیمم ۱٫۷**: جواب‌های آنلاین بدون کلید (مسیردهی خودکار آفلاین/آنلاین)، ۵ توییک ماکسیمم، حالت MAX بازی جلویی را بوست می‌کند
 - 🤖 **هوش مصنوعی و پردازش‌های ۱٫۶**: مشاور هوشمند آفلاین (آیا اجرا می‌شود؟ فارسی/انگلیسی برای ۱۲۰+ بازی)، صفحه پردازش‌های زنده (بوست اولویت + تمرکز رم)، بک‌گراند نئونی جدید، ۴ توییک تازه اف‌پی‌اس
 - ⚡ **پایداری ۱٫۵**: باگ درخت resources درست شد (آیکون/لوگو/مانیفست حالا درست لود می‌شوند)، چک‌سام واقعی PE، لوگوی جدید ⚡FPS + بنر، ابزار اعتبارسنجی `tools/audit_pe.py`
 - 🛡️ نقطه بازیابی + بکاپ کامل + **بازگردانی همه با یک کلیک**

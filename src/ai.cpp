@@ -3,6 +3,7 @@
 // scores your CPU/GPU/RAM, compares against the embedded requirements
 // database and answers "can I run it?" plus FPS questions.
 #include "app.h"
+#include <winhttp.h>
 #include <wctype.h>
 
 // ---------- small text helpers ----------
@@ -542,12 +543,14 @@ static std::wstring AiHelp(bool fa) {
         L"\u2022 \"FPS tips for Rust\" \u2014 best settings per game\r\n"
         L"\u2022 \"My specs?\" / \"RAM?\" / \"Ping?\" \u2014 PC answers\r\n"
         L"\u2022 \"How do I boost FPS?\" \u2014 step-by-step\r\n"
+        L"\u2022 Anything else \u2014 online AI answers in seconds\r\n"
         L"\r\nI speak English and Persian. I work offline, inside this app.";
     return L"\U0001F916 من این کارها را بلدم:\r\n"
         L"\u2022 «GTA V اجرا میشه؟» \u2014 بررسی کامل سیستم\r\n"
         L"\u2022 «نکات فریم Rust» \u2014 بهترین تنظیمات هر بازی\r\n"
         L"\u2022 «مشخصات سیستم؟» / «رم؟» / «پینگ؟»\r\n"
         L"\u2022 «چطور اف‌پی‌اس را بالا ببرم؟» \u2014 قدم‌به‌قدم\r\n"
+        L"\u2022 هر سوال دیگری \u2014 هوش آنلاین در چند ثانیه جواب می‌دهد\r\n"
         L"\r\nفارسی و انگلیسی می‌فهمم و کاملاً آفلاین داخل همین برنامه کار می‌کنم.";
 }
 
@@ -635,4 +638,141 @@ std::wstring Ai_Answer(const std::wstring& q) {
     if (canRun || AiHas(low, L"?") || AiHas(low, L"game") || AiHasU8(low, "بازی"))
         return AiUnknown(alts, db, fa);
     return AiFallback(fa);
+}
+
+// ---------- online AI (keyless HTTPS, async) ----------
+static std::string AiUrlEncode(const std::string& in) {
+    static const char* hex = "0123456789ABCDEF";
+    std::string o;
+    for (size_t i = 0; i < in.size(); i++) {
+        unsigned char c = (unsigned char)in[i];
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+            c == '-' || c == '_' || c == '.' || c == '~') o += (char)c;
+        else { o += '%'; o += hex[c >> 4]; o += hex[c & 15]; }
+    }
+    return o;
+}
+static bool AiOnline_Fetch(const std::wstring& q, bool fa, std::wstring& answer) {
+    std::wstring sys = fa ?
+        L"تو دستیار فارسی FPS Booster هستی. خیلی کوتاه (زیر ۱۲۰ کلمه) و کاربردی جواب بده. سوال: " :
+        L"You are the FPS Booster assistant. Answer briefly (under 120 words), practical. Question: ";
+    std::string path = "/" + AiUrlEncode(WideToUtf8(sys + q.substr(0, 400))) + "?model=openai";
+    if (path.size() > 4000) return false;
+    std::wstring wpath = Utf8ToWide(path);
+    HINTERNET ses = WinHttpOpen(L"FPSBooster/1.7", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+        WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!ses) return false;
+    WinHttpSetTimeouts(ses, 8000, 8000, 10000, 25000);
+    bool ok = false;
+    std::string body;
+    HINTERNET con = WinHttpConnect(ses, L"text.pollinations.ai", INTERNET_DEFAULT_HTTPS_PORT, 0);
+    if (con) {
+        HINTERNET req = WinHttpOpenRequest(con, L"GET", wpath.c_str(), NULL,
+            WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
+        if (req) {
+            if (WinHttpSendRequest(req, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
+                    WINHTTP_NO_REQUEST_DATA, 0, 0, 0) && WinHttpReceiveResponse(req, NULL)) {
+                DWORD code = 0, clen = sizeof(code);
+                WinHttpQueryHeaders(req, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                    NULL, &code, &clen, NULL);
+                if (code == 200) {
+                    char buf[4096];
+                    DWORD got = 0;
+                    ok = true;
+                    while (body.size() < 6000 && WinHttpReadData(req, buf, sizeof(buf), &got) && got > 0)
+                        body.append(buf, got);
+                    if (body.empty()) ok = false;
+                }
+            }
+            WinHttpCloseHandle(req);
+        }
+        WinHttpCloseHandle(con);
+    }
+    WinHttpCloseHandle(ses);
+    if (!ok) return false;
+    while (!body.empty() && (body[body.size() - 1] == '\n' || body[body.size() - 1] == '\r' ||
+        body[body.size() - 1] == ' ' || body[body.size() - 1] == '\t')) body.erase(body.size() - 1);
+    size_t st = 0;
+    while (st < body.size() && (body[st] == '\n' || body[st] == '\r' || body[st] == ' ')) st++;
+    std::wstring w = Utf8ToWide(body.substr(st));
+    std::wstring o;
+    for (size_t i = 0; i < w.size(); i++) {
+        if (w[i] == L'\r') continue;
+        if (w[i] == L'\n') o += L"\r\n";
+        else o += w[i];
+    }
+    answer = o;
+    return !answer.empty();
+}
+struct AiOnlineCtx { HWND w; std::wstring q; bool fa; };
+static CRITICAL_SECTION g_aiCs;
+static bool g_aiCsInit = false;
+static std::wstring g_aiRes;
+static bool g_aiOk = false;
+static DWORD WINAPI AiOnlineThread(LPVOID arg) {
+    AiOnlineCtx* c = (AiOnlineCtx*)arg;
+    std::wstring a;
+    bool ok = AiOnline_Fetch(c->q, c->fa, a);
+    if (!g_aiCsInit) { InitializeCriticalSection(&g_aiCs); g_aiCsInit = true; }
+    EnterCriticalSection(&g_aiCs);
+    g_aiRes = a; g_aiOk = ok;
+    LeaveCriticalSection(&g_aiCs);
+    HWND w = c->w;
+    delete c;
+    PostMessageW(w, WM_APP_AI, ok ? 1 : 0, 0);
+    return 0;
+}
+void AiOnline_AskAsync(HWND w, const std::wstring& q) {
+    AiOnlineCtx* c = new AiOnlineCtx;
+    c->w = w; c->q = q; c->fa = Strings_GetLang() == 1;
+    HANDLE h = CreateThread(NULL, 0, AiOnlineThread, c, 0, NULL);
+    if (h) CloseHandle(h);
+    else delete c;
+}
+bool AiOnline_TakeResult(std::wstring& a) {
+    if (!g_aiCsInit) return false;
+    EnterCriticalSection(&g_aiCs);
+    a = g_aiRes;
+    bool ok = g_aiOk;
+    g_aiRes.clear();
+    LeaveCriticalSection(&g_aiCs);
+    return ok;
+}
+// True when the online model would answer better than the offline engine:
+// unknown/new games, open questions. Local data (specs/RAM/net) and known
+// games stay offline: instant and more accurate.
+bool Ai_NeedsOnline(const std::wstring& q) {
+    if (q.empty()) return false;
+    std::wstring low = ToLower(q);
+    std::vector<GameSpec> db;
+    Games_Specs(db);
+    std::vector<int> alts;
+    if (AiFindGame(q, db, alts) >= 0) return false;
+    bool canRun = AiHas(low, L"run") || AiHas(low, L"play") || AiHas(low, L"can ") || AiHas(low, L"will ") ||
+        AiHas(low, L"work") || AiHas(low, L"handle");
+    static const char* canRunFa[] = {"اجرا", "میاد", "می‌آید", "میکشه", "می‌کشه", "سیستم", "کامپیوتر",
+        "لپتاپ", "لبتاب", "کافی", "جواب", "ساپورت", "پشتیبانی", "می‌تونه", "میتونه", "آیا", "برام", "میاره", NULL};
+    for (int i = 0; canRunFa[i]; i++)
+        if (AiHasU8(low, canRunFa[i])) { canRun = true; break; }
+    if (canRun) return true;
+    bool fpsQ = AiHas(low, L"fps") || AiHas(low, L"frame") || AiHas(low, L"lag") || AiHas(low, L"stutter") ||
+        AiHas(low, L"boost") || AiHas(low, L"setting") || AiHas(low, L"performance") || AiHas(low, L"smooth");
+    static const char* fpsFa[] = {"اف‌پی‌اس", "اف پی اس", "فریم", "لگ", "بوست", "بهینه", "تنظیمات",
+        "گرافیک", "روان", "افت", "گیر", "تاخیر", "تأخیر", "فپس", NULL};
+    for (int i = 0; fpsFa[i]; i++)
+        if (AiHasU8(low, fpsFa[i])) { fpsQ = true; break; }
+    if (fpsQ) return true;
+    static const char* localK[] = {"spec", "my pc", "my system", "my laptop", "cpu", "gpu", "processor",
+        "ram", "memory", "ping", "dns", "internet", "packet", "مشخصات", "سیستم من", "پردازنده", "کارت",
+        "رم", "حافظه", "مموری", "پینگ", "اینترنت", "آنلاین", NULL};
+    for (int i = 0; localK[i]; i++)
+        if (AiHasU8(low, localK[i])) return false;
+    if (low.size() < 40) {
+        static const char* chat0[] = {"help", "guide", "what can", "abilities", "who are", "thanks", "thank you",
+            "hello", "hey", "salam", "dorood", "کمک", "راهنما", "چی کار", "چکار", "توانایی", "کی هستی",
+            "مرسی", "ممنون", "تشکر", "سلام", "درود", NULL};
+        for (int i = 0; chat0[i]; i++)
+            if (AiHasU8(low, chat0[i])) return false;
+    }
+    return true;
 }

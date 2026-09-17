@@ -164,3 +164,24 @@ bool Proc_Restore(DWORD pid) {
     CloseHandle(h);
     return a && b;
 }
+
+int Proc_TrimAll() {
+    int trimmed = 0;
+    DWORD self = GetCurrentProcessId();
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return 0;
+    PROCESSENTRY32W pe;
+    pe.dwSize = sizeof(pe);
+    if (Process32FirstW(snap, &pe)) {
+        do {
+            DWORD id = pe.th32ProcessID;
+            if (id == 0 || id == 4 || id == self) continue;
+            HANDLE h = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, id);
+            if (!h) continue;
+            if (EmptyWorkingSet(h)) trimmed++;
+            CloseHandle(h);
+        } while (Process32NextW(snap, &pe));
+    }
+    CloseHandle(snap);
+    return trimmed;
+}

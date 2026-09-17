@@ -40,6 +40,7 @@
 #define WM_APP_REFRESH    (WM_APP + 15)
 #define WM_APP_NET        (WM_APP + 16)
 #define WM_APP_AUTO       (WM_APP + 17)
+#define WM_APP_AI         (WM_APP + 18)
 
 // Pages
 enum PageId { PAGE_DASH = 0, PAGE_AI, PAGE_GAMES, PAGE_PROC, PAGE_BOOST, PAGE_TWEAKS, PAGE_SYSTEM, PAGE_POWER, PAGE_NET, PAGE_HELP, PAGE_SETTINGS, PAGE_COUNT };
@@ -89,7 +90,7 @@ enum CtrlId {
     IDC_N_DNSLIST = 1113, IDC_N_DNSAPPLY, IDC_N_PINGALL, IDC_N_FASTEST,
     IDC_N_PINGRES, IDC_N_C1, IDC_N_C2, IDC_N_CSET,
     // ai advisor page
-    IDC_A_INPUT = 1200, IDC_A_ASK, IDC_A_OUT, IDC_A_Q1, IDC_A_Q2, IDC_A_Q3, IDC_A_STATUS,
+    IDC_A_INPUT = 1200, IDC_A_ASK, IDC_A_OUT, IDC_A_Q1, IDC_A_Q2, IDC_A_Q3, IDC_A_STATUS, IDC_A_ONLINE,
     // live processes page
     IDC_R_LIST = 1300, IDC_R_BOOST, IDC_R_RAM, IDC_R_RESTORE, IDC_R_REFRESH, IDC_R_STATUS,
     // tray menu
@@ -359,6 +360,9 @@ bool AutoBoostWatching();
 
 // ---------- ai.cpp ----------
 std::wstring Ai_Answer(const std::wstring& q); // offline advisor, EN/FA by UI lang
+bool Ai_NeedsOnline(const std::wstring& q); // true when the online model answers better
+void AiOnline_AskAsync(HWND w, const std::wstring& q); // threaded HTTPS, posts WM_APP_AI
+bool AiOnline_TakeResult(std::wstring& a); // call on WM_APP_AI
 
 // ---------- procboost.cpp ----------
 struct ProcInfo {
@@ -373,6 +377,7 @@ void Proc_Enum(std::vector<ProcInfo>& out);
 bool Proc_Boost(DWORD pid, std::wstring& msg);
 bool Proc_RamFocus(DWORD pid, std::wstring& msg);
 bool Proc_Restore(DWORD pid);
+int  Proc_TrimAll(); // EmptyWorkingSet on all user processes, returns count
 
 // ---------- ui.cpp ----------
 bool UI_Create(HINSTANCE hInst);

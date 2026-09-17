@@ -44,6 +44,8 @@ static void SetLabel(HWND h, const std::wstring& s, COLORREF c) {
 }
 
 // ---------- Settings ----------
+static bool g_aiOnline = true;
+static std::wstring g_aiPending;
 std::wstring g_lastBoost;
 void Settings_Load() {
     g_lastBoost.clear();
@@ -58,10 +60,11 @@ void Settings_Load() {
     g_beastGuid = root.wstr("beast");
     g_beastPrev = root.wstr("beastprev");
     g_autoBoost = root.num("autoboost", 0) != 0;
+    g_aiOnline = root.num("aionline", 1) != 0;
 }
 void Settings_Save() {
     char nb[128];
-    snprintf(nb, 128, "{\"lang\":%d,\"tray\":%d,\"score\":%d,\"autoboost\":%d", Strings_GetLang(), g_closeToTray?1:0, g_lastScore, g_autoBoost?1:0);
+    snprintf(nb, 128, "{\"lang\":%d,\"tray\":%d,\"score\":%d,\"autoboost\":%d,\"aionline\":%d", Strings_GetLang(), g_closeToTray?1:0, g_lastScore, g_autoBoost?1:0, g_aiOnline?1:0);
     std::string j = nb;
     j += ",\"lastBoost\":\"" + JsonEscapeW(g_lastBoost) + "\"";
     j += ",\"beast\":\"" + JsonEscapeW(g_beastGuid) + "\",\"beastprev\":\"" + JsonEscapeW(g_beastPrev) + "\"}";
@@ -281,7 +284,7 @@ static HWND hBoostLog, hBoostProg, hBoostStart, hBoostUndo, hBoostMax;
 static HWND hTweakList, hTweakDetail, hTweakApply, hTweakRevert, hTweakAll, hTweakUndoAll;
 static HWND hSysCpu, hSysRam, hSysUp, hSysTimer, hSysGraph;
 static HWND hHelpText;
-static HWND hAiInput, hAiAsk, hAiQ1, hAiQ2, hAiQ3, hAiHint, hAiOut, hAiStatus;
+static HWND hAiInput, hAiAsk, hAiQ1, hAiQ2, hAiQ3, hAiHint, hAiOut, hAiStatus, hAiOnline;
 static HWND hProcList, hProcHint, hProcStatus;
 static HWND hSetLang, hSetTray, hSetStartup;
 static HWND hSetStList = NULL;
@@ -831,6 +834,13 @@ static void BuildNet(HWND p) {
 }
 
 // ---------- AI advisor ----------
+static void AiAppendBlock(const std::wstring& block) {
+    int len = GetWindowTextLengthW(hAiOut);
+    SendMessageW(hAiOut, EM_SETSEL, (WPARAM)len, (LPARAM)len);
+    SendMessageW(hAiOut, EM_REPLACESEL, 0, (LPARAM)block.c_str());
+    SendMessageW(hAiOut, EM_SETSEL, (WPARAM)-1, (LPARAM)-1);
+    SendMessageW(hAiOut, EM_SCROLLCARET, 0, 0);
+}
 static void AiAsk() {
     wchar_t q[1024];
     GetWindowTextW(hAiInput, q, 1024);
@@ -839,14 +849,28 @@ static void AiAsk() {
     while (b > a && iswspace(q[b - 1])) b--;
     if (a >= b) { SetLabel(hAiStatus, T(SID_A_HINT), COL_YELLOW); return; }
     q[b] = 0;
-    std::wstring ans = Ai_Answer(q + a);
-    int len = GetWindowTextLengthW(hAiOut);
-    SendMessageW(hAiOut, EM_SETSEL, (WPARAM)len, (LPARAM)len);
-    std::wstring block = WFormat(L"%s: %s\r\n%s\r\n\r\n", T(SID_A_YOU), q + a, ans.c_str());
-    SendMessageW(hAiOut, EM_REPLACESEL, 0, (LPARAM)block.c_str());
-    SendMessageW(hAiOut, EM_SETSEL, (WPARAM)-1, (LPARAM)-1);
-    SendMessageW(hAiOut, EM_SCROLLCARET, 0, 0);
+    std::wstring qq = q + a;
     SetWindowTextW(hAiInput, L"");
+    if (g_aiOnline && Ai_NeedsOnline(qq)) {
+        AiAppendBlock(WFormat(L"%s: %s\r\n", T(SID_A_YOU), qq.c_str()));
+        g_aiPending = qq;
+        SetLabel(hAiStatus, T(SID_A_THINK), COL_ACCENT);
+        AiOnline_AskAsync(g_hMain, qq);
+    } else {
+        std::wstring ans = Ai_Answer(qq);
+        AiAppendBlock(WFormat(L"%s: %s\r\n%s\r\n\r\n", T(SID_A_YOU), qq.c_str(), ans.c_str()));
+        SetLabel(hAiStatus, T(SID_STATUS_READY), COL_MUTED);
+    }
+}
+static void AiOnlineDone(bool ok) {
+    std::wstring a;
+    if (ok && AiOnline_TakeResult(a)) {
+        AiAppendBlock(WFormat(L"%s (%s):\r\n%s\r\n\r\n", T(SID_NAV_AI), T(SID_A_ONTAG), a.c_str()));
+    } else {
+        AiOnline_TakeResult(a);
+        std::wstring fb = Ai_Answer(g_aiPending);
+        AiAppendBlock(WFormat(L"%s:\r\n%s\r\n\r\n", T(SID_NAV_AI), fb.c_str()));
+    }
     SetLabel(hAiStatus, T(SID_STATUS_READY), COL_MUTED);
 }
 static void BuildAI(HWND p) {
@@ -860,6 +884,8 @@ static void BuildAI(HWND p) {
     hAiOut = MkEdit(p, IDC_A_OUT, 0, 100, 860, 440, true, true);
     hAiStatus = MkLabel(p, 0, 548, 860, 24);
     SetLabel(hAiStatus, T(SID_STATUS_READY), COL_MUTED);
+    hAiOnline = MkCheck(p, IDC_A_ONLINE, 660, 76, 200, SID_A_ONLINE);
+    SetChecked(hAiOnline, g_aiOnline);
     SetWindowTextW(hAiOut, Ai_Answer(L"").c_str());
 }
 
@@ -1275,6 +1301,14 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             break;
         case IDC_G_LAUNCH:
             if (g_gameSel >= 0 && !g_boosting) Games_BoostLaunch(g_gameSel, g_hMain);
+            break;
+        case IDC_A_ONLINE:
+            if (code == BN_CLICKED) {
+                SetChecked(hAiOnline, !IsChecked(hAiOnline));
+                InvalidateRect(hAiOnline, NULL, TRUE);
+                g_aiOnline = IsChecked(hAiOnline);
+                Settings_Save();
+            }
             break;
         case IDC_A_ASK: AiAsk(); break;
         case IDC_A_Q1: SetWindowTextW(hAiInput, T(SID_A_Q1)); AiAsk(); break;
@@ -1735,6 +1769,9 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             DestroyMenu(m);
         }
         break;
+    case WM_APP_AI:
+        AiOnlineDone(w == 1);
+        break;
     case WM_TIMER:
         if (w == 1 && g_page == PAGE_SYSTEM) SysRefresh();
         break;
@@ -1760,7 +1797,8 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         MoveWindow(hAiQ1, 0, S(40), qw, S(30), TRUE);
         MoveWindow(hAiQ2, qw + S(10), S(40), qw, S(30), TRUE);
         MoveWindow(hAiQ3, qw * 2 + S(20), S(40), pw - qw * 2 - S(20), S(30), TRUE); }
-        MoveWindow(hAiHint, 0, S(76), pw, S(22), TRUE);
+        MoveWindow(hAiHint, 0, S(76), pw - S(220), S(22), TRUE);
+        MoveWindow(hAiOnline, pw - S(210), S(74), S(210), S(26), TRUE);
         MoveWindow(hAiOut, 0, S(100), pw, ph - S(100) - S(32), TRUE);
         MoveWindow(hAiStatus, 0, ph - S(26), pw, S(24), TRUE);
         MoveWindow(hProcList, 0, 0, pw, ph - S(150), TRUE);

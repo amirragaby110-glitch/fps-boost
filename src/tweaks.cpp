@@ -714,6 +714,133 @@ static bool RvXboxSvc() {
     return ok;
 }
 
+// --- 32. Low-latency network (Nagle off) ---
+static void NagleIfaces(std::vector<std::wstring>& subs) {
+    HKEY k;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE,
+        L"SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces",
+        0, KEY_READ, &k) != ERROR_SUCCESS) return;
+    wchar_t name[256];
+    for (DWORD i = 0; ; i++) {
+        DWORD len = 256;
+        if (RegEnumKeyExW(k, i, name, &len, NULL, NULL, NULL, NULL) != ERROR_SUCCESS) break;
+        subs.push_back(std::wstring(L"SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\") + name);
+    }
+    RegCloseKey(k);
+}
+static int CkNagle() {
+    std::vector<std::wstring> subs;
+    NagleIfaces(subs);
+    if (subs.empty()) return -1;
+    for (size_t i = 0; i < subs.size(); i++) {
+        DWORD a = 99, b = 99;
+        RegGetDword(HKEY_LOCAL_MACHINE, subs[i].c_str(), L"TcpAckFrequency", a);
+        RegGetDword(HKEY_LOCAL_MACHINE, subs[i].c_str(), L"TCPNoDelay", b);
+        if (a != 1 || b != 1) return 0;
+    }
+    DWORD t = 99;
+    RegGetDword(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+        L"TcpTimedWaitDelay", t);
+    return t == 30 ? 1 : 0;
+}
+static bool ApNagle() {
+    std::vector<std::wstring> subs;
+    NagleIfaces(subs);
+    bool ok = !subs.empty();
+    for (size_t i = 0; i < subs.size(); i++)
+        ok = BSetD(HKEY_LOCAL_MACHINE, subs[i].c_str(), L"TcpAckFrequency", 1) && ok &&
+             BSetD(HKEY_LOCAL_MACHINE, subs[i].c_str(), L"TCPNoDelay", 1);
+    return BSetD(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+        L"TcpTimedWaitDelay", 30) && ok;
+}
+static bool RvNagle() {
+    std::vector<std::wstring> subs;
+    NagleIfaces(subs);
+    std::vector<const wchar_t*> sp, np;
+    std::vector<std::wstring> keep = subs;
+    keep.push_back(L"SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters");
+    for (size_t i = 0; i < subs.size(); i++) {
+        sp.push_back(keep[i].c_str()); np.push_back(L"TcpAckFrequency");
+        sp.push_back(keep[i].c_str()); np.push_back(L"TCPNoDelay");
+    }
+    sp.push_back(keep[keep.size() - 1].c_str()); np.push_back(L"TcpTimedWaitDelay");
+    if (sp.empty()) return false;
+    return RevertKeys(HKEY_LOCAL_MACHINE, &sp[0], &np[0], (int)sp.size());
+}
+// --- 33. Zero multimedia responsiveness ---
+static int CkSysResp() {
+    DWORD v = 99;
+    if (!RegGetDword(HKEY_LOCAL_MACHINE,
+        L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile",
+        L"SystemResponsiveness", v)) return 0;
+    return v == 0 ? 1 : 0;
+}
+static bool ApSysResp() {
+    return BSetD(HKEY_LOCAL_MACHINE,
+        L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile",
+        L"SystemResponsiveness", 0);
+}
+static bool RvSysResp() {
+    const wchar_t* s[] = {L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile"};
+    const wchar_t* n[] = {L"SystemResponsiveness"};
+    return RevertKeys(HKEY_LOCAL_MACHINE, s, n, 1);
+}
+// --- 34. Foreground responsiveness quantum ---
+static int CkWin32Prio() {
+    DWORD v = 99;
+    if (!RegGetDword(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\PriorityControl",
+        L"Win32PrioritySeparation", v)) return 0;
+    return v == 0x26 ? 1 : 0;
+}
+static bool ApWin32Prio() {
+    return BSetD(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\PriorityControl",
+        L"Win32PrioritySeparation", 0x26);
+}
+static bool RvWin32Prio() {
+    const wchar_t* s[] = {L"SYSTEM\\CurrentControlSet\\Control\\PriorityControl"};
+    const wchar_t* n[] = {L"Win32PrioritySeparation"};
+    return RevertKeys(HKEY_LOCAL_MACHINE, s, n, 1);
+}
+// --- 35. VBS + Memory Integrity off (advanced) ---
+static int CkVbs() {
+    DWORD a = 99, b = 99;
+    RegGetDword(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\DeviceGuard",
+        L"EnableVirtualizationBasedSecurity", a);
+    RegGetDword(HKEY_LOCAL_MACHINE,
+        L"SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios\\HypervisorEnforcedCodeIntegrity",
+        L"Enabled", b);
+    return (a == 0 && b == 0) ? 1 : 0;
+}
+static bool ApVbs() {
+    return BSetD(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\DeviceGuard",
+        L"EnableVirtualizationBasedSecurity", 0) &&
+        BSetD(HKEY_LOCAL_MACHINE,
+        L"SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios\\HypervisorEnforcedCodeIntegrity",
+        L"Enabled", 0);
+}
+static bool RvVbs() {
+    const wchar_t* s[] = {L"SYSTEM\\CurrentControlSet\\Control\\DeviceGuard",
+        L"SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios\\HypervisorEnforcedCodeIntegrity"};
+    const wchar_t* n[] = {L"EnableVirtualizationBasedSecurity", L"Enabled"};
+    return RevertKeys(HKEY_LOCAL_MACHINE, s, n, 2);
+}
+// --- 36. Modern Standby off (advanced) ---
+static int CkAoAc() {
+    DWORD v = 99;
+    if (!RegGetDword(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Power",
+        L"PlatformAoAcOverride", v)) return 0;
+    return v == 0 ? 1 : 0;
+}
+static bool ApAoAc() {
+    return BSetD(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Power",
+        L"PlatformAoAcOverride", 0);
+}
+static bool RvAoAc() {
+    const wchar_t* s[] = {L"SYSTEM\\CurrentControlSet\\Control\\Power"};
+    const wchar_t* n[] = {L"PlatformAoAcOverride"};
+    return RevertKeys(HKEY_LOCAL_MACHINE, s, n, 1);
+}
+
 // ================= Table =================
 static const Tweak kTweaks[] = {
 {"gamemode",
@@ -871,6 +998,31 @@ static const Tweak kTweaks[] = {
  "Disables 4 useless Xbox services that waste RAM and CPU.",
  "۴ سرویس بلااستفاده ایکس‌باکس که رم و پردازنده هدر می‌دهند خاموش می‌شود.",
  TCAT_PERF, true, true, false, CkXboxSvc, ApXboxSvc, RvXboxSvc},
+{"nagle",
+ "Low-latency network (Nagle off)", "شبکه کم‌تأخیر (خاموش کردن Nagle)",
+ "Disables Nagle buffering on all adapters. Lower online ping.",
+ "بافرینگ Nagle را در همه آداپتورها خاموش می‌کند. پینگ کمتر.",
+ TCAT_NET, true, false, false, CkNagle, ApNagle, RvNagle},
+{"sysrespons",
+ "Zero multimedia responsiveness", "صفر کردن سهمیه مولتی‌مدیا",
+ "Gives games 100% CPU instead of 80% reserved for background tasks.",
+ "به‌جای ۸۰٪، صددرصد پردازنده را به بازی می‌دهد.",
+ TCAT_PERF, true, false, false, CkSysResp, ApSysResp, RvSysResp},
+{"win32prio",
+ "Foreground responsiveness quantum", "کوانتوم پاسخ‌گویی بازی",
+ "Short gamer-friendly CPU slices for the foreground game.",
+ "تکه‌های کوتاه و مناسب بازی برای پردازنده جلویی.",
+ TCAT_PERF, true, false, false, CkWin32Prio, ApWin32Prio, RvWin32Prio},
+{"vbs",
+ "Disable VBS + Memory Integrity", "خاموش کردن VBS و Memory Integrity",
+ "Advanced: big Win11 gains (5-25%) but lowers virtualization security. Needs restart.",
+ "پیشرفته: افزایش زیاد در ویندوز ۱۱ (۵ تا ۲۵٪) ولی امنیت کمتر. نیاز به ری‌استارت.",
+ TCAT_ADV, false, true, false, CkVbs, ApVbs, RvVbs},
+{"modernstandby",
+ "Disable Modern Standby", "خاموش کردن Modern Standby",
+ "Advanced: kills S0 sleep stutter on laptops. Needs restart.",
+ "پیشرفته: لگ‌های خواب S0 لپ‌تاپ را حذف می‌کند. نیاز به ری‌استارت.",
+ TCAT_ADV, false, true, false, CkAoAc, ApAoAc, RvAoAc},
 };
 
 const std::vector<Tweak>& Tweaks_All() {

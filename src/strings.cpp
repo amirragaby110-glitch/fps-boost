@@ -1,0 +1,203 @@
+// FPS Booster Pro - String data (UTF-8 source, converted to UTF-16 at startup)
+#include "app.h"
+
+struct StrRow { StrId id; const char* en; const char* fa; };
+
+static const StrRow kRows[] = {
+{SID_APP_NAME, "FPS Booster Pro", "FPS Booster Pro"},
+{SID_APP_TAG, "Ultimate Game FPS Optimizer", "بهینه‌ساز حرفه‌ای اف‌پی‌اس بازی"},
+{SID_ADMIN_OK, "Administrator", "مدیر سیستم"},
+{SID_ADMIN_NO, "Not elevated", "بدون دسترسی مدیر"},
+
+{SID_NAV_DASH, "Dashboard", "داشبورد"},
+{SID_NAV_GAMES, "My Games", "بازی‌های من"},
+{SID_NAV_BOOST, "One-Click Boost", "بوست تک‌کلیکی"},
+{SID_NAV_TWEAKS, "Tweaks Center", "مرکز توییک‌ها"},
+{SID_NAV_SYSTEM, "System", "سیستم"},
+{SID_NAV_HELP, "Guide", "راهنما"},
+{SID_NAV_SETTINGS, "Settings", "تنظیمات"},
+
+{SID_ON, "ON", "روشن"},
+{SID_OFF, "OFF", "خاموش"},
+{SID_YES, "Yes", "بله"},
+{SID_NO, "No", "خیر"},
+{SID_APPLIED, "Applied", "اعمال شده"},
+{SID_NOT_APPLIED, "Not applied", "اعمال نشده"},
+{SID_NA, "N/A", "نامشخص"},
+{SID_ACTION_NEEDED, "Action", "اقدام"},
+{SID_RECOMMENDED, "Recommended", "پیشنهادی"},
+{SID_ADVANCED, "Advanced", "پیشرفته"},
+{SID_NEEDS_REBOOT, "Needs restart", "نیاز به ری‌استارت"},
+{SID_BTN_APPLY, "Apply", "اعمال"},
+{SID_BTN_REVERT, "Revert", "بازگردانی"},
+{SID_BTN_APPLY_ALL, "Apply all", "اعمال همه"},
+{SID_BTN_REVERT_ALL, "Revert all", "بازگردانی همه"},
+{SID_BTN_REFRESH, "Refresh", "به‌روزرسانی"},
+{SID_BTN_CLOSE, "Close", "بستن"},
+{SID_BTN_BROWSE, "Browse...", "انتخاب..."},
+{SID_BTN_ADD, "Add", "افزودن"},
+{SID_BTN_REMOVE, "Remove", "حذف"},
+{SID_BTN_SAVE, "Save", "ذخیره"},
+{SID_BTN_CANCEL, "Cancel", "انصراف"},
+{SID_STATUS_READY, "Ready", "آماده"},
+{SID_VER, "Version 1.0.0", "نسخه 1.0.0"},
+
+{SID_DASH_TITLE, "Dashboard", "داشبورد"},
+{SID_DASH_SUB, "Your PC optimization status at a glance", "وضعیت بهینه‌سازی سیستم شما در یک نگاه"},
+{SID_DASH_SCORE, "Optimization score", "امتیاز بهینه‌سازی"},
+{SID_DASH_GRADE, "Grade", "رتبه"},
+{SID_DASH_SYSTEM, "System summary", "خلاصه سیستم"},
+{SID_DASH_CPU, "CPU", "پردازنده"},
+{SID_DASH_GPU, "GPU", "کارت گرافیک"},
+{SID_DASH_RAM, "RAM", "حافظه رم"},
+{SID_DASH_OS, "Windows", "ویندوز"},
+{SID_DASH_POWER, "Power plan", "حالت مصرف انرژی"},
+{SID_DASH_DISPLAY, "Display", "نمایشگر"},
+{SID_DASH_STATUS, "Key optimizations", "بهینه‌سازی‌های کلیدی"},
+{SID_DASH_BOOST, "BOOST NOW", "بوست کن!"},
+{SID_DASH_TIP, "Pro tip", "نکته حرفه‌ای"},
+{SID_DASH_GAMES, "Games", "بازی‌ها"},
+{SID_DASH_LASTBOOST, "Last boost", "آخرین بوست"},
+{SID_DASH_NEVER, "Never", "هرگز"},
+{SID_TIP1, "Use Boost & Launch from My Games so CPU priority, timer and RAM are tuned for that game.", "از بخش «بازی‌های من» گزینه Boost & Launch را بزنید تا اولویت پردازنده، تایمر و رم مخصوص همان بازی تنظیم شود."},
+{SID_TIP2, "Set your display to its maximum refresh rate from the System page for smoother motion.", "از بخش «سیستم» نرخ نوسازی نمایشگر را روی حداکثر بگذارید تا تصویر روان‌تر شود."},
+{SID_TIP3, "In NVIDIA Control Panel set Power Management to Prefer Maximum Performance per game.", "در کنترل پنل انویدیا برای هر بازی Power Management را روی Prefer Maximum Performance بگذارید."},
+{SID_TIP4, "Close browsers and launchers with the auto-close list before launching heavy games.", "قبل از اجرای بازی‌های سنگین، مرورگر و لانچرها را با لیست بستن خودکار ببندید."},
+{SID_TIP5, "After big Windows updates, run One-Click Boost again to re-apply everything.", "بعد از آپدیت‌های بزرگ ویندوز، بوست تک‌کلیکی را دوباره اجرا کنید تا همه تنظیمات برگردند."},
+
+{SID_G_TITLE, "My Games", "بازی‌های من"},
+{SID_G_SUB, "Pick a game and launch it with maximum FPS settings", "یک بازی انتخاب کنید و با نهایت تنظیمات اف‌پی‌اس اجرایش کنید"},
+{SID_G_COL_NAME, "Game", "بازی"},
+{SID_G_COL_PATH, "Executable", "فایل اجرایی"},
+{SID_G_COL_PLAYS, "Launches", "اجراها"},
+{SID_G_COL_LAST, "Last played", "آخرین اجرا"},
+{SID_G_ADD, "Add game...", "افزودن بازی..."},
+{SID_G_SCAN, "Auto-scan PC", "اسکن خودکار"},
+{SID_G_REMOVE, "Remove", "حذف"},
+{SID_G_SETTINGS, "Per-game settings", "تنظیمات مخصوص بازی"},
+{SID_G_PRIORITY, "CPU priority:", "اولویت پردازنده:"},
+{SID_G_PRIO0, "Normal", "معمولی"},
+{SID_G_PRIO1, "Above normal", "بالاتر از معمولی"},
+{SID_G_PRIO2, "High (recommended)", "بالا (پیشنهادی)"},
+{SID_G_AFFINITY, "CPU cores:", "هسته‌های پردازنده:"},
+{SID_G_AFF0, "All cores", "همه هسته‌ها"},
+{SID_G_AFF1, "All except CPU 0", "همه به‌جز CPU 0"},
+{SID_G_GPUPREF, "Prefer high-performance GPU", "ترجیح کارت گرافیک قوی"},
+{SID_G_FSO, "Disable fullscreen optimizations", "غیرفعال‌سازی بهینه‌سازی تمام‌صفحه"},
+{SID_G_ARGS, "Launch options:", "آپشن‌های اجرا:"},
+{SID_G_TIMER, "Ultra-low timer (0.5ms) while playing", "تایمر فوق‌سریع (0.5ms) هنگام بازی"},
+{SID_G_POWER, "Switch to Ultimate Performance while playing", "حالت Ultimate Performance هنگام بازی"},
+{SID_G_KILL, "Auto-close programs (exe names, ; separated):", "بستن خودکار برنامه‌ها (نام exe با ; جدا شود):"},
+{SID_G_LAUNCH, "BOOST & LAUNCH", "بوست و اجرا"},
+{SID_G_IDLE, "Idle - select a game", "آماده - یک بازی انتخاب کنید"},
+{SID_G_PREP, "Preparing boost...", "در حال آماده‌سازی بوست..."},
+{SID_G_RUNNING, "In game - optimizations active", "در حال بازی - بهینه‌سازی‌ها فعال‌اند"},
+{SID_G_DONE, "Session finished - system restored", "بازی تمام شد - سیستم به حالت عادی برگشت"},
+{SID_G_EMPTY, "No games yet. Add your first game!", "هنوز بازی اضافه نشده. اولین بازی را اضافه کنید!"},
+{SID_G_ADDED, "Game added.", "بازی اضافه شد."},
+{SID_G_PICK_EXE, "Select game executable", "فایل اجرایی بازی را انتخاب کنید"},
+{SID_G_EXE_FILTER, "Programs (*.exe)", "برنامه‌ها (*.exe)"},
+{SID_G_SCAN_DONE, "Scan finished.", "اسکن تمام شد."},
+{SID_G_NO_NEW, "No new games found.", "بازی جدیدی پیدا نشد."},
+{SID_G_TIP_TITLE, "Game tip:", "نکته مخصوص این بازی:"},
+{SID_G_KILL_HINT, "Example: chrome.exe;Discord.exe", "مثال: chrome.exe;Discord.exe"},
+
+{SID_B_TITLE, "One-Click Boost", "بوست تک‌کلیکی"},
+{SID_B_SUB, "Applies every recommended optimization in one go", "همه بهینه‌سازی‌های پیشنهادی را یکجا اعمال می‌کند"},
+{SID_B_START, "START ULTIMATE BOOST", "شروع بوست نهایی"},
+{SID_B_UNDO, "Undo everything", "بازگردانی همه"},
+{SID_B_WORKING, "Boosting... please wait", "در حال بوست... لطفاً صبر کنید"},
+{SID_B_DONE, "Boost complete!", "بوست کامل شد!"},
+{SID_B_FAIL, "Boost finished with some errors (see log)", "بوست با چند خطا تمام شد (لاگ را ببینید)"},
+{SID_B_STEP_RESTORE, "Creating restore point...", "ساخت نقطه بازیابی..."},
+{SID_B_STEP_BACKUP, "Backing up current settings...", "پشتیبان‌گیری از تنظیمات فعلی..."},
+{SID_B_STEP_TWEAKS, "Applying optimizations...", "اعمال بهینه‌سازی‌ها..."},
+{SID_B_STEP_TEMP, "Cleaning junk files...", "پاک‌سازی فایل‌های اضافی..."},
+{SID_B_STEP_RAM, "Freeing memory...", "آزادسازی حافظه..."},
+{SID_B_STEP_DISP, "Setting max refresh rate...", "تنظیم حداکثر نرخ نوسازی..."},
+{SID_B_STEP_SCORE, "Calculating score...", "محاسبه امتیاز..."},
+{SID_B_REBOOT_MSG, "Some changes need a restart to take full effect.", "بعضی تغییرات برای اثر کامل نیاز به ری‌استارت دارند."},
+{SID_B_CONFIRM_UNDO, "Revert ALL applied optimizations?", "همه بهینه‌سازی‌های اعمال‌شده برگردانده شود؟"},
+
+{SID_T_TITLE, "Tweaks Center", "مرکز توییک‌ها"},
+{SID_T_SUB, "Every FPS method in one place - apply individually or all at once", "همه روش‌های افزایش اف‌پی‌اس یکجا - تکی یا همه را اعمال کنید"},
+{SID_T_COL_NAME, "Optimization", "بهینه‌سازی"},
+{SID_T_COL_STATUS, "Status", "وضعیت"},
+{SID_T_COL_CAT, "Category", "دسته"},
+{SID_T_CAT_GAMING, "Windows Gaming", "گیمینگ ویندوز"},
+{SID_T_CAT_PERF, "Performance", "کارایی"},
+{SID_T_CAT_VISUAL, "Visual", "ظاهری"},
+{SID_T_CAT_NET, "Network", "شبکه"},
+{SID_T_CAT_PRIV, "Privacy", "حریم خصوصی"},
+{SID_T_CAT_ADV, "Advanced", "پیشرفته"},
+{SID_T_CAT_ACT, "Actions", "اقدامات"},
+{SID_T_APPLY, "Apply selected", "اعمال انتخاب‌شده"},
+{SID_T_REVERT, "Revert selected", "بازگردانی انتخاب‌شده"},
+{SID_T_ALL, "Apply all recommended", "اعمال همه پیشنهادی‌ها"},
+{SID_T_UNDO_ALL, "Revert all", "بازگردانی همه"},
+{SID_T_DETAIL, "Select a tweak to see details.", "یک توییک را انتخاب کنید تا جزئیات نمایش داده شود."},
+{SID_T_WARN, "Advanced: only change if you know what it does. Everything is reversible.", "پیشرفته: فقط اگر می‌دانید چه می‌کند تغییر دهید. همه موارد قابل بازگشت‌اند."},
+
+{SID_S_TITLE, "System", "سیستم"},
+{SID_S_SUB, "Live stats and instant performance actions", "آمار زنده و اقدامات فوری"},
+{SID_S_CPU, "CPU usage", "مصرف پردازنده"},
+{SID_S_RAM, "RAM usage", "مصرف رم"},
+{SID_S_UPTIME, "Uptime", "مدت روشن بودن"},
+{SID_S_TIMER, "Timer resolution", "دقت تایمر"},
+{SID_S_CLEAN_RAM, "Free memory now", "آزادسازی رم"},
+{SID_S_CLEAN_TEMP, "Clean junk now", "پاک‌سازی فایل‌ها"},
+{SID_S_MAXREFRESH, "Set max refresh rate", "حداکثر نرخ نوسازی"},
+{SID_S_FREED, "Freed", "آزاد شد"},
+{SID_S_REFRESH_DONE, "Refresh rate set to", "نرخ نوسازی تنظیم شد روی"},
+{SID_S_REFRESH_NONE, "Already at maximum.", "از قبل روی حداکثر است."},
+
+{SID_H_TITLE, "Guide", "راهنما"},
+{SID_H_SUB, "How to get the maximum FPS", "چطور بیشترین اف‌پی‌اس را بگیرید"},
+
+{SID_SET_TITLE, "Settings", "تنظیمات"},
+{SID_SET_SUB, "Application preferences", "ترجیحات برنامه"},
+{SID_SET_LANG, "Language / زبان:", "Language / زبان:"},
+{SID_SET_LANG_EN, "English", "English"},
+{SID_SET_LANG_FA, "Persian (Farsi)", "فارسی"},
+{SID_SET_TRAY, "Minimize to system tray", "کمینه‌سازی به سینی سیستم"},
+{SID_SET_STARTUP, "Start with Windows", "اجرا همراه ویندوز"},
+{SID_SET_FOLDER, "Open data folder", "باز کردن پوشه داده‌ها"},
+{SID_SET_RESET, "Reset all settings", "بازنشانی همه تنظیمات"},
+{SID_SET_ABOUT, "FPS Booster Pro 1.0.0 - Ultimate Game FPS Optimizer", "FPS Booster Pro نسخه 1.0.0 - بهینه‌ساز نهایی اف‌پی‌اس بازی"},
+{SID_SET_CONFIRM_RESET, "Reset all settings and revert all tweaks?", "همه تنظیمات بازنشانی و همه توییک‌ها برگردانده شود؟"},
+{SID_SET_RESTART_LANG, "Language will apply after restart.", "زبان بعد از اجرای مجدد اعمال می‌شود."},
+
+{SID_MSG_ADMIN, "FPS Booster needs administrator rights to optimize Windows.", "FPS Booster برای بهینه‌سازی ویندوز به دسترسی مدیر نیاز دارد."},
+{SID_MSG_DONE, "Done.", "انجام شد."},
+{SID_MSG_FAIL, "Operation failed.", "عملیات ناموفق بود."},
+{SID_MSG_ERROR, "Error", "خطا"},
+{SID_MSG_REBOOT_NOW, "Restart now?", "الان ری‌استارت شود؟"},
+{SID_MSG_NEED_ADMIN, "Please run as administrator.", "لطفاً با دسترسی مدیر اجرا کنید."},
+{SID_TRAY_OPEN, "Open FPS Booster", "باز کردن FPS Booster"},
+{SID_TRAY_BOOST, "One-Click Boost", "بوست تک‌کلیکی"},
+{SID_TRAY_EXIT, "Exit", "خروج"},
+{SID_TRAY_TIP, "FPS Booster Pro", "FPS Booster Pro"},
+};
+
+static std::wstring g_cache[2][SID_COUNT];
+static int g_lang = 1;
+static bool g_init = false;
+
+void Strings_Init() {
+    if (g_init) return;
+    for (size_t i = 0; i < sizeof(kRows)/sizeof(kRows[0]); i++) {
+        int id = (int)kRows[i].id;
+        if (id < 0 || id >= SID_COUNT) continue;
+        g_cache[0][id] = Utf8ToWide(kRows[i].en);
+        g_cache[1][id] = Utf8ToWide(kRows[i].fa);
+    }
+    g_init = true;
+}
+
+void Strings_SetLang(int lang) { g_lang = (lang == 0) ? 0 : 1; }
+int Strings_GetLang() { return g_lang; }
+const wchar_t* T(StrId id) {
+    if (!g_init) Strings_Init();
+    if (id < 0 || id >= SID_COUNT) return L"?";
+    return g_cache[g_lang][id].c_str();
+}

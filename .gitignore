@@ -1,0 +1,6 @@
+build/
+release/
+tests/*.inc
+__pycache__/
+*.pyc
+*.tmp

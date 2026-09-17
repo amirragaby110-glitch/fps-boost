@@ -726,7 +726,7 @@ static std::wstring g_aiLastQ, g_aiLastA; // short conversation memory (online)
 static int AiHttp(const wchar_t* host, const wchar_t* method, const wchar_t* wpath,
                   const char* body, DWORD bodyLen, std::string& out, DWORD& code) {
     out.clear(); code = 0;
-    HINTERNET ses = WinHttpOpen(L"FPSBooster/2.1.1", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+    HINTERNET ses = WinHttpOpen(L"FPSBooster/2.2.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
         WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!ses) return 0;
     WinHttpSetTimeouts(ses, 5000, 8000, 10000, 45000);

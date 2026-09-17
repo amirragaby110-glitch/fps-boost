@@ -93,9 +93,80 @@ static void Theme_Resolve() {
 static COLORREF Darken(COLORREF c, int pct) {
     return RGB(GetRValue(c) * pct / 100, GetGValue(c) * pct / 100, GetBValue(c) * pct / 100);
 }
+static COLORREF Lighten(COLORREF c, int amt) { // amt 0..255 toward white
+    if (amt < 0) amt = 0; if (amt > 255) amt = 255;
+    return RGB(GetRValue(c) + (255 - GetRValue(c)) * amt / 255,
+               GetGValue(c) + (255 - GetGValue(c)) * amt / 255,
+               GetBValue(c) + (255 - GetBValue(c)) * amt / 255);
+}
 
 static int g_scale = 96;
 static int S(int v) { return (v * g_scale + 48) / 96; }
+
+// ---------- Aurora UI helpers: rounded paths, seamless bg slices, hover tracking ----------
+#define BTN_SECONDARY 7
+#define BTN_PRIMARY 8
+static HWND g_hotBtn = NULL; // button currently under the mouse
+static int g_pulse = 0; // boost-button glow animation phase
+static HFONT g_hFontIcon = NULL; // emoji icons for nav
+static LRESULT CALLBACK BtnSubProc(HWND h, UINT m, WPARAM w, LPARAM l, UINT_PTR id, DWORD_PTR ref) {
+    (void)id; (void)ref;
+    switch (m) {
+    case WM_MOUSEMOVE:
+        if (g_hotBtn != h) {
+            HWND prev = g_hotBtn; g_hotBtn = h;
+            if (prev && IsWindow(prev)) InvalidateRect(prev, NULL, FALSE);
+            InvalidateRect(h, NULL, FALSE);
+            TRACKMOUSEEVENT t; t.cbSize = sizeof(t); t.dwFlags = TME_LEAVE; t.hwndTrack = h;
+            TrackMouseEvent(&t);
+        }
+        break;
+    case WM_MOUSELEAVE:
+        if (g_hotBtn == h) { g_hotBtn = NULL; InvalidateRect(h, NULL, FALSE); }
+        break;
+    case WM_DESTROY:
+        if (g_hotBtn == h) g_hotBtn = NULL;
+        break;
+    }
+    return DefSubclassProc(h, m, w, l);
+}
+static void BtnHook(HWND b) { if (b) SetWindowSubclass(b, BtnSubProc, 0, 0); }
+static GraphicsPath* RoundPath(int L, int T, int R, int B, int rad) {
+    if (rad < 1) rad = 1;
+    int d = rad * 2;
+    if (d > R - L) d = R - L;
+    if (d > B - T) d = B - T;
+    if (d < 2) d = 2;
+    GraphicsPath* p = new GraphicsPath();
+    p->AddArc(L, T, d, d, 180, 90);
+    p->AddArc(R - d, T, d, d, 270, 90);
+    p->AddArc(R - d, B - d, d, d, 0, 90);
+    p->AddArc(L, B - d, d, d, 90, 90);
+    p->CloseFigure();
+    return p;
+}
+// Fill an item rect with the exact page-gradient slice behind it (seamless rounded corners).
+static void BgSliceFill(HDC dc, HWND item, const RECT& r) {
+    HWND par = GetParent(item);
+    RECT pr; GetClientRect(par, &pr);
+    POINT pt = {r.left, r.top};
+    MapWindowPoints(item, par, &pt, 1);
+    int w = r.right - r.left, h = r.bottom - r.top;
+    if (w < 1 || h < 1) return;
+    int H = pr.bottom > 1 ? pr.bottom : 1;
+    int y0 = pt.y; if (y0 < 0) y0 = 0; if (y0 > H) y0 = H;
+    int y1 = pt.y + h; if (y1 < 0) y1 = 0; if (y1 > H) y1 = H;
+    COLORREF t = g_theme.bgTop, b = g_theme.bgBottom;
+    Color c0(255, GetRValue(t) + (GetRValue(b) - GetRValue(t)) * y0 / H,
+                  GetGValue(t) + (GetGValue(b) - GetGValue(t)) * y0 / H,
+                  GetBValue(t) + (GetBValue(b) - GetBValue(t)) * y0 / H);
+    Color c1(255, GetRValue(t) + (GetRValue(b) - GetRValue(t)) * y1 / H,
+                  GetGValue(t) + (GetGValue(b) - GetGValue(t)) * y1 / H,
+                  GetBValue(t) + (GetBValue(b) - GetBValue(t)) * y1 / H);
+    Graphics g(dc);
+    LinearGradientBrush br(Point(r.left, r.top), Point(r.left, r.bottom), c0, c1);
+    g.FillRectangle(&br, r.left, r.top, w, h);
+}
 
 static HBRUSH hBrBg = NULL, hBrPanel = NULL, hBrSide = NULL, hBrCard = NULL, hBrEdit = NULL;
 static Bitmap* g_imgLogo = NULL;
@@ -187,19 +258,24 @@ static HWND MkHeader(HWND p, int x, int y, int w, StrId t) {
     return h;
 }
 static HWND MkButton(HWND p, int id, int x, int y, int w, int h, StrId t) {
-    HWND b = Mk(p, WC_BUTTONW, T(t), WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON, 0,
+    HWND b = Mk(p, WC_BUTTONW, T(t), WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW, 0,
         x, y, w, h, id, g_hFont);
+    SetWindowLongPtrW(b, GWLP_USERDATA, BTN_SECONDARY);
+    BtnHook(b);
     return b;
 }
 static HWND MkCTA(HWND p, int id, int x, int y, int w, int h, StrId t) {
     HWND b = Mk(p, WC_BUTTONW, T(t), WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW, 0,
         x, y, w, h, id, g_hFontBig);
+    SetWindowLongPtrW(b, GWLP_USERDATA, BTN_PRIMARY);
+    BtnHook(b);
     return b;
 }
 static HWND MkCheck(HWND p, int id, int x, int y, int w, StrId t) {
     HWND b = Mk(p, WC_BUTTONW, T(t), WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW, 0,
         x, y, w, 26, id, g_hFont);
     SetWindowLongPtrW(b, GWLP_USERDATA, 1); // 1 = checkbox
+    BtnHook(b);
     return b;
 }
 static bool IsChecked(HWND h) { return SendMessageW(h, BM_GETCHECK, 0, 0) == BST_CHECKED; }
@@ -264,34 +340,84 @@ static LPARAM LVGetData(HWND l, int row) {
 static Gdiplus::Color ThColor(BYTE a, COLORREF c) {
     return Gdiplus::Color(a, GetRValue(c), GetGValue(c), GetBValue(c));
 }
-// Modern procedural background: vertical gradient + two soft accent glows
-static void PaintPageBg(HDC dc, int W, int H) {
-    if (W < 1) W = 1; if (H < 1) H = 1;
-    Graphics g(dc);
+// Aurora background: gradient + glow blobs + sheen + dot grid + vignette (rendered once, cached).
+static void GlowBlob(Graphics& g, int cx, int cy, int rad, COLORREF c, BYTE alpha) {
+    GraphicsPath p;
+    p.AddEllipse(cx - rad, cy - rad, rad * 2, rad * 2);
+    PathGradientBrush b(&p);
+    b.SetCenterColor(ThColor(alpha, c));
+    Color s[1]; s[0] = ThColor(0, c);
+    int n = 1; b.SetSurroundColors(s, &n);
+    b.SetCenterPoint(Point(cx, cy));
+    g.FillPath(&b, &p);
+}
+static void PaintBgInto(Graphics& g, int W, int H) {
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
     LinearGradientBrush bg(Point(0, 0), Point(0, H),
         ThColor(255, g_theme.bgTop), ThColor(255, g_theme.bgBottom));
     g.FillRectangle(&bg, 0, 0, W, H);
-    int R = W < H ? W : H;
-    int rad = R * 3 / 4 + 40;
-    BYTE ga = g_theme.dark ? (BYTE)30 : (BYTE)22;
-    GraphicsPath p1;
-    int cx1 = W * 17 / 20, cy1 = H / 8;
-    p1.AddEllipse(cx1 - rad, cy1 - rad, rad * 2, rad * 2);
-    PathGradientBrush g1(&p1);
-    g1.SetCenterColor(ThColor(ga, g_theme.accent));
-    Color s1[1]; s1[0] = ThColor(0, g_theme.accent);
-    int n1 = 1; g1.SetSurroundColors(s1, &n1);
-    g1.SetCenterPoint(Point(cx1, cy1));
-    g.FillPath(&g1, &p1);
-    GraphicsPath p2;
-    int cx2 = W / 12, cy2 = H * 9 / 10;
-    p2.AddEllipse(cx2 - rad, cy2 - rad, rad * 2, rad * 2);
-    PathGradientBrush g2(&p2);
-    g2.SetCenterColor(ThColor(ga, g_theme.accent2));
-    Color s2[1]; s2[0] = ThColor(0, g_theme.accent2);
-    int n2 = 1; g2.SetSurroundColors(s2, &n2);
-    g2.SetCenterPoint(Point(cx2, cy2));
-    g.FillPath(&g2, &p2);
+    int m = W < H ? W : H;
+    BYTE ga = g_theme.dark ? (BYTE)34 : (BYTE)26;
+    GlowBlob(g, W * 17 / 20, H / 8, m * 3 / 5 + 40, g_theme.accent, ga);
+    GlowBlob(g, W / 12, H * 9 / 10, m * 3 / 5 + 40, g_theme.accent2, ga);
+    GlowBlob(g, W * 2 / 5, -H / 6, m / 3 + 30, g_theme.accent2, g_theme.dark ? (BYTE)20 : (BYTE)14);
+    // diagonal sheen band
+    {
+        Point pts[4] = {Point(0, 0), Point(W * 3 / 10, 0), Point(W / 10, H), Point(0, H)};
+        BYTE sa = g_theme.dark ? (BYTE)10 : (BYTE)14;
+        LinearGradientBrush sh(Point(0, 0), Point(W * 3 / 10, 0),
+            Color(sa, 255, 255, 255), Color(0, 255, 255, 255));
+        g.FillPolygon(&sh, pts, 4);
+    }
+    // faint dot grid
+    {
+        int step = S(26); if (step < 18) step = 18;
+        SolidBrush dot(g_theme.dark ? Color(9, 255, 255, 255) : Color(13, 100, 130, 180));
+        int ds = g_scale >= 144 ? 3 : 2;
+        for (int y = step / 2; y < H; y += step)
+            for (int x = step / 2; x < W; x += step)
+                g.FillEllipse(&dot, x, y, ds, ds);
+    }
+    // vignette
+    {
+        GraphicsPath v; v.AddRectangle(Rect(0, 0, W, H));
+        PathGradientBrush vb(&v);
+        vb.SetCenterColor(Color(0, 0, 0, 0));
+        Color vs[1]; vs[0] = Color(g_theme.dark ? (BYTE)70 : (BYTE)26, 0, 0, 0);
+        int nv = 1; vb.SetSurroundColors(vs, &nv);
+        g.FillPath(&vb, &v);
+    }
+}
+struct BgKey { int w, h; COLORREF t, b, a, a2; int dark; };
+static Bitmap* g_bgCache[2] = {NULL, NULL};
+static BgKey g_bgKey[2];
+static int g_bgLru = 0;
+static void PaintPageBg(HDC dc, int W, int H) {
+    if (W < 1) W = 1; if (H < 1) H = 1;
+    BgKey k; k.w = W; k.h = H; k.t = g_theme.bgTop; k.b = g_theme.bgBottom;
+    k.a = g_theme.accent; k.a2 = g_theme.accent2; k.dark = g_theme.dark ? 1 : 0;
+    Bitmap* hit = NULL;
+    for (int i = 0; i < 2; i++) {
+        BgKey& e = g_bgKey[i];
+        if (g_bgCache[i] && e.w == k.w && e.h == k.h && e.t == k.t && e.b == k.b &&
+            e.a == k.a && e.a2 == k.a2 && e.dark == k.dark) { hit = g_bgCache[i]; g_bgLru = i ^ 1; break; }
+    }
+    if (!hit) {
+        int sc = (W > 1920 || H > 1200) ? 2 : 1;
+        Bitmap* nb = new Bitmap(W / sc, H / sc, PixelFormat32bppARGB);
+        if (nb) { Graphics gg(nb); PaintBgInto(gg, W / sc, H / sc); }
+        delete g_bgCache[g_bgLru];
+        g_bgCache[g_bgLru] = nb; g_bgKey[g_bgLru] = k;
+        hit = nb; g_bgLru ^= 1;
+    }
+    if (hit) {
+        Graphics g(dc);
+        g.SetInterpolationMode(InterpolationModeHighQualityBicubic);
+        g.DrawImage(hit, 0, 0, W, H);
+    } else {
+        HBRUSH b = CreateSolidBrush(g_theme.bgTop);
+        RECT r = {0, 0, W, H}; FillRect(dc, &r, b); DeleteObject(b);
+    }
 }
 static LRESULT CALLBACK PageProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     switch (m) {
@@ -341,10 +467,16 @@ static LRESULT CALLBACK SideProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         g.FillRectangle(&bg, r.left, r.top, r.right - r.left, gh);
         SolidBrush glow(ThColor(70, g_theme.accent));
         g.FillRectangle(&glow, 0, 0, r.right, S(3));
+        {
+            LinearGradientBrush es(Point(0, 0), Point(0, gh),
+                ThColor(90, g_theme.accent), ThColor(10, g_theme.accent2));
+            g.FillRectangle(&es, r.right - S(2), 0, S(2), gh);
+        }
         g.SetInterpolationMode(InterpolationModeHighQualityBicubic);
         if (g_imgLogo) {
             int sz = S(148);
             int x = (r.right - sz) / 2;
+            GlowBlob(g, r.right / 2, S(12) + sz / 2, sz * 2 / 3, g_theme.accent, g_theme.dark ? 46 : 30);
             g.DrawImage(g_imgLogo, x, S(12), sz, sz);
         }
         SetBkMode(dc, TRANSPARENT);
@@ -356,15 +488,29 @@ static LRESULT CALLBACK SideProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         SetTextColor(dc, COL_MUTED);
         RECT tr2 = {0, S(190), r.right, S(210)};
         DrawTextW(dc, T(SID_APP_TAG), -1, &tr2, DT_CENTER | DT_SINGLELINE);
-        // divider
-        HPEN pen = CreatePen(PS_SOLID, 1, COL_LINE);
-        HPEN op = (HPEN)SelectObject(dc, pen);
-        MoveToEx(dc, S(20), S(222), NULL); LineTo(dc, r.right - S(20), S(222));
-        SelectObject(dc, op); DeleteObject(pen);
-        // version at bottom
-        SetTextColor(dc, COL_MUTED);
-        RECT vr = {0, r.bottom - S(34), r.right, r.bottom - S(10)};
-        DrawTextW(dc, T(SID_VER), -1, &vr, DT_CENTER | DT_SINGLELINE);
+        // gradient divider
+        {
+            LinearGradientBrush dv(Point(S(20), 0), Point(r.right - S(20), 0),
+                ThColor(0, g_theme.line), ThColor(0, g_theme.line));
+            Color dcols[3] = {ThColor(0, g_theme.line), ThColor(255, g_theme.line), ThColor(0, g_theme.line)};
+            REAL dpos[3] = {0.0f, 0.5f, 1.0f};
+            dv.SetInterpolationColors(dcols, dpos, 3);
+            g.FillRectangle(&dv, S(20), S(222), r.right - S(40), S(1) < 1 ? 1 : S(1));
+        }
+        // version pill
+        {
+            int pw = S(150), ph = S(22);
+            int px = (r.right - pw) / 2, py = r.bottom - S(32);
+            GraphicsPath* pill = RoundPath(px, py, px + pw, py + ph, ph / 2);
+            SolidBrush pb2(g_theme.dark ? Color(40, 140, 165, 210) : Color(200, 255, 255, 255));
+            g.FillPath(&pb2, pill);
+            Pen pe2(ThColor(g_theme.dark ? 110 : 160, g_theme.line), 1);
+            g.DrawPath(&pe2, pill);
+            delete pill;
+            SetTextColor(dc, COL_MUTED);
+            RECT vr = {px, py, px + pw, py + ph};
+            DrawTextW(dc, T(SID_VER), -1, &vr, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+        }
         SelectObject(dc, old);
         EndPaint(h, &ps);
         return 0;
@@ -1251,42 +1397,44 @@ void UI_GameEvent(int phase, const wchar_t* info) {
 static void DrawProg(const DRAWITEMSTRUCT* d) {
     HDC dc = d->hDC;
     RECT r = d->rcItem;
-    HBRUSH pb = CreateSolidBrush(COL_PANEL);
-    FillRect(dc, &r, pb);
-    DeleteObject(pb);
+    BgSliceFill(dc, d->hwndItem, r);
     int pct = (int)GetWindowLongPtrW(d->hwndItem, GWLP_USERDATA) - 100;
     if (pct < 0) pct = 0;
     if (pct > 100) pct = 100;
     Graphics g(dc);
     g.SetSmoothingMode(SmoothingModeAntiAlias);
-    int rad = (r.bottom - r.top) / 2 - S(2);
-    if (rad < 2) rad = 2;
-    GraphicsPath track;
-    track.AddArc(r.left, r.top + S(2), rad * 2, rad * 2, 180, 90);
-    track.AddArc(r.right - rad * 2 - 1, r.top + S(2), rad * 2, rad * 2, 270, 90);
-    track.AddArc(r.right - rad * 2 - 1, r.bottom - S(2) - rad * 2, rad * 2, rad * 2, 0, 90);
-    track.AddArc(r.left, r.bottom - S(2) - rad * 2, rad * 2, rad * 2, 90, 90);
-    track.CloseFigure();
-    COLORREF trackC = g_theme.dark ? COL_EDIT : RGB(216, 224, 234);
-    SolidBrush tbr(ThColor(255, trackC));
-    g.FillPath(&tbr, &track);
-    Pen edge(Color(255, 60, 80, 120), 1);
-    g.DrawPath(&edge, &track);
+    int M = S(2);
+    int L = r.left + M, T = r.top + S(4), R = r.right - M, B = r.bottom - S(4);
+    GraphicsPath* track = RoundPath(L, T, R, B, S(8));
+    SolidBrush tbr(ThColor(255, g_theme.dark ? g_theme.edit : RGB(216, 224, 234)));
+    g.FillPath(&tbr, track);
+    Pen edge(ThColor(140, g_theme.line), 1);
+    g.DrawPath(&edge, track);
     if (pct > 0) {
-        int fw = (r.right - r.left) * pct / 100;
+        int fw = (R - L) * pct / 100;
         if (fw > 0) {
-            g.SetClip(&track);
-            LinearGradientBrush fbr(Point(r.left, r.top), Point(r.right, r.top),
-                Color(255, 34, 211, 238), Color(255, 232, 121, 249));
-            g.FillRectangle(&fbr, r.left, r.top, fw, r.bottom - r.top);
+            g.SetClip(track);
+            LinearGradientBrush fbr(Point(L, T), Point(R, T),
+                ThColor(255, g_theme.accent), ThColor(255, g_theme.accent2));
+            g.FillRectangle(&fbr, L, T, fw, B - T);
+            LinearGradientBrush sh(Point(0, T), Point(0, (T + B) / 2),
+                Color(50, 255, 255, 255), Color(0, 255, 255, 255));
+            g.FillRectangle(&sh, L, T, fw, (B - T) / 2);
+            SolidBrush tip(Color(150, 255, 255, 255));
+            int td = B - T - S(6);
+            if (td > S(4) && fw > td + S(2)) g.FillEllipse(&tip, L + fw - td - S(2), T + S(3), td, td);
             g.ResetClip();
         }
     }
+    delete track;
     wchar_t t[16];
     StringCchPrintfW(t, 16, L"%d%%", pct);
     SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, COL_TEXT);
     HFONT old = (HFONT)SelectObject(dc, g_hFont);
+    RECT sh2 = r; sh2.left += 1; sh2.top += 1;
+    SetTextColor(dc, g_theme.dark ? RGB(0, 0, 0) : RGB(255, 255, 255));
+    DrawTextW(dc, t, -1, &sh2, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SetTextColor(dc, COL_TEXT);
     DrawTextW(dc, t, -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     SelectObject(dc, old);
 }
@@ -1300,9 +1448,14 @@ static void DrawCombo(const DRAWITEMSTRUCT* d) {
     FillRect(dc, &r, b);
     DeleteObject(b);
     if (edit) {
-        HBRUSH fb = CreateSolidBrush(RGB(70, 90, 130));
+        bool foc = (d->itemState & ODS_FOCUS) != 0;
+        HBRUSH fb = CreateSolidBrush(foc ? COL_ACCENT : (g_theme.dark ? RGB(70, 90, 130) : COL_LINE));
         FrameRect(dc, &r, fb);
         DeleteObject(fb);
+        RECT ul = {r.left, r.bottom - S(2), r.right, r.bottom};
+        HBRUSH ub = CreateSolidBrush(COL_ACCENT);
+        FillRect(dc, &ul, ub);
+        DeleteObject(ub);
     }
     wchar_t txt[256]; txt[0] = 0;
     if (edit) GetWindowTextW(d->hwndItem, txt, 256);
@@ -1320,39 +1473,132 @@ static void DrawCTA(const DRAWITEMSTRUCT* d) {
     RECT r = d->rcItem;
     bool pressed = (d->itemState & ODS_SELECTED) != 0;
     bool disabled = (d->itemState & ODS_DISABLED) != 0;
+    bool hov = !disabled && !pressed && d->hwndItem == g_hotBtn;
+    BgSliceFill(dc, d->hwndItem, r);
     Graphics g(dc);
     g.SetSmoothingMode(SmoothingModeAntiAlias);
-    Color c1 = disabled ? Color(90, 100, 120) : (pressed ? Color(14, 150, 180) : Color(34, 211, 238));
-    Color c2 = disabled ? Color(70, 80, 100) : (pressed ? Color(160, 60, 190) : Color(232, 121, 249));
-    LinearGradientBrush br(Point(r.left, r.top), Point(r.right, r.bottom), c1, c2);
-    GraphicsPath path;
-    int rad = 10;
-    path.AddArc(r.left, r.top, rad * 2, rad * 2, 180, 90);
-    path.AddArc(r.right - rad * 2, r.top, rad * 2, rad * 2, 270, 90);
-    path.AddArc(r.right - rad * 2, r.bottom - rad * 2, rad * 2, rad * 2, 0, 90);
-    path.AddArc(r.left, r.bottom - rad * 2, rad * 2, rad * 2, 90, 90);
-    path.CloseFigure();
-    // clip background
-    HRGN bg = CreateRectRgn(r.left, r.top, r.right, r.bottom);
-    HBRUSH pb = CreateSolidBrush(COL_PANEL);
-    FillRgn(dc, bg, pb);
-    DeleteObject(pb); DeleteObject(bg);
-    g.FillPath(&br, &path);
-    // text
+    int M = S(3);
+    int L = r.left + M, T = r.top + M, R = r.right - M, B = r.bottom - M;
+    int rad = (B - T) / 2 - S(2);
+    if (rad > S(12)) rad = S(12);
+    if (rad < S(5)) rad = S(5);
+    COLORREF a = g_theme.accent, b = g_theme.accent2;
+    if (disabled) { a = b = g_theme.dark ? RGB(70, 82, 105) : RGB(170, 182, 200); }
+    else if (pressed) { a = Darken(a, 72); b = Darken(b, 72); }
+    else if (hov) { a = Lighten(a, 50); b = Lighten(b, 50); }
+    GraphicsPath* path = RoundPath(L, T, R, B, rad);
+    if (!disabled && !pressed) {
+        int ga = hov ? 90 : 45;
+        if (d->hwndItem == hBoostStart) {
+            int ph = g_pulse % 40;
+            ga += (ph < 20 ? ph * 3 : (40 - ph) * 3); // breathing glow
+        }
+        if (ga > 160) ga = 160;
+        Pen glow(ThColor((BYTE)ga, a), (REAL)S(5));
+        g.DrawPath(&glow, path);
+    }
+    LinearGradientBrush br(Point(L, T), Point(R, B), ThColor(255, a), ThColor(255, b));
+    g.FillPath(&br, path);
+    g.SetClip(path);
+    {
+        LinearGradientBrush sh(Point(0, T), Point(0, T + (B - T) / 2),
+            Color(disabled ? 0 : 46, 255, 255, 255), Color(0, 255, 255, 255));
+        g.FillRectangle(&sh, L, T, R - L, (B - T) / 2 + 1);
+    }
+    Pen hi(Color(disabled ? 0 : 70, 255, 255, 255), 1);
+    g.DrawLine(&hi, L + rad, T + 1, R - rad, T + 1);
+    Pen lo(Color(disabled ? 0 : 60, 0, 0, 0), 1);
+    g.DrawLine(&lo, L + rad, B - 2, R - rad, B - 2);
+    g.ResetClip();
+    if ((d->itemState & ODS_FOCUS) && !disabled) {
+        Pen fr(ThColor(220, Lighten(a, 90)), 2);
+        g.DrawPath(&fr, path);
+    }
+    delete path;
     wchar_t txt[128];
     GetWindowTextW(d->hwndItem, txt, 128);
     SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, disabled ? RGB(200, 200, 200) : RGB(10, 12, 20));
     HFONT old = (HFONT)SelectObject(dc, g_hFontBig);
-    DrawTextW(dc, txt, -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    RECT tr = r;
+    if (pressed) { tr.left += 1; tr.top += 1; }
+    if (!disabled) {
+        RECT sh2 = tr; sh2.left += S(1); sh2.top += S(1);
+        SetTextColor(dc, RGB(10, 14, 24));
+        DrawTextW(dc, txt, -1, &sh2, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+        SetTextColor(dc, RGB(255, 255, 255));
+    } else {
+        SetTextColor(dc, g_theme.dark ? RGB(150, 160, 180) : RGB(255, 255, 255));
+    }
+    DrawTextW(dc, txt, -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
     SelectObject(dc, old);
-    if ((d->itemState & ODS_FOCUS) && !disabled) DrawFocusRect(dc, &r);
+}
+static void DrawBtn2(const DRAWITEMSTRUCT* d) {
+    HDC dc = d->hDC;
+    RECT r = d->rcItem;
+    bool pressed = (d->itemState & ODS_SELECTED) != 0;
+    bool disabled = (d->itemState & ODS_DISABLED) != 0;
+    bool hov = !disabled && !pressed && d->hwndItem == g_hotBtn;
+    BgSliceFill(dc, d->hwndItem, r);
+    Graphics g(dc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+    int M = S(2);
+    int L = r.left + M, T = r.top + M, R = r.right - M, B = r.bottom - M;
+    int rad = (B - T) / 2 - S(2);
+    if (rad > S(10)) rad = S(10);
+    if (rad < S(4)) rad = S(4);
+    GraphicsPath* path = RoundPath(L, T, R, B, rad);
+    if (hov) {
+        Pen glow(ThColor(70, g_theme.accent), (REAL)S(4));
+        g.DrawPath(&glow, path);
+    }
+    Color fill = disabled ? Color(30, 120, 135, 160)
+        : (g_theme.dark ? Color(hov ? 60 : 42, 140, 165, 210) : Color(hov ? 255 : 235, 255, 255, 255));
+    SolidBrush fb(fill);
+    g.FillPath(&fb, path);
+    if (pressed && !disabled) {
+        SolidBrush dk(Color(40, 0, 0, 0));
+        g.FillPath(&dk, path);
+    }
+    Color bc = disabled ? ThColor(120, g_theme.line)
+        : (hov ? ThColor(230, g_theme.accent) : ThColor(g_theme.dark ? 130 : 200, g_theme.line));
+    Pen edge(bc, hov && !disabled ? (REAL)S(2) : 1);
+    g.DrawPath(&edge, path);
+    if ((d->itemState & ODS_FOCUS) && !disabled) {
+        Pen fr(ThColor(200, g_theme.accent), 2);
+        g.DrawPath(&fr, path);
+    }
+    delete path;
+    wchar_t txt[256];
+    GetWindowTextW(d->hwndItem, txt, 256);
+    RECT tr = {L + S(8), T, R - S(8), B};
+    if (pressed) { tr.left += 1; tr.top += 1; }
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, disabled ? COL_MUTED : (hov ? RoleColor(LR_WHITE) : COL_TEXT));
+    HFONT old = (HFONT)SelectObject(dc, g_hFont);
+    DrawTextW(dc, txt, -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    SelectObject(dc, old);
+}
+static const wchar_t* NavIcon(int page) {
+    switch (page) {
+    case PAGE_DASH: return L"\U0001F4CA";
+    case PAGE_AI: return L"\U00002728";
+    case PAGE_GAMES: return L"\U0001F3AE";
+    case PAGE_PROC: return L"\U0001F9E0";
+    case PAGE_BOOST: return L"\U0001F680";
+    case PAGE_TWEAKS: return L"\U0001F6E0\uFE0F";
+    case PAGE_SYSTEM: return L"\U0001F5A5\uFE0F";
+    case PAGE_POWER: return L"\U0001F50B";
+    case PAGE_NET: return L"\U0001F310";
+    case PAGE_HELP: return L"\u2753\uFE0F";
+    default: return L"\u2699\uFE0F";
+    }
 }
 static void DrawNav(const DRAWITEMSTRUCT* d) {
     HDC dc = d->hDC;
     RECT r = d->rcItem;
     int id = (int)d->CtlID - IDC_NAV_BASE;
     bool sel = (id == g_page);
+    bool hov = !sel && d->hwndItem == g_hotBtn;
     // blend with the sidebar gradient (parent has WS_CLIPCHILDREN, so paint our own bg)
     RECT pr; GetClientRect(GetParent(d->hwndItem), &pr);
     POINT pt = {0, 0};
@@ -1364,86 +1610,120 @@ static void DrawNav(const DRAWITEMSTRUCT* d) {
     HBRUSH bg = CreateSolidBrush(RGB(br0 + (br1 - br0) * tt / 255, bg0 + (bg1 - bg0) * tt / 255, bb0 + (bb1 - bb0) * tt / 255));
     FillRect(dc, &r, bg);
     DeleteObject(bg);
+    Graphics g(dc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+    int L = r.left + S(4), T = r.top + S(3), R = r.right - S(4), B = r.bottom - S(3);
+    int rad = (B - T) / 2 - S(2);
+    if (rad < S(6)) rad = S(6);
+    GraphicsPath* pill = RoundPath(L, T, R, B, rad);
     if (sel) {
-        Graphics g(dc);
-        g.SetSmoothingMode(SmoothingModeAntiAlias);
-        SolidBrush pill(ThColor(g_theme.dark ? (BYTE)56 : (BYTE)70, g_theme.accent));
-        int L = r.left + S(2), T = r.top + S(3), R = r.right - S(2), B = r.bottom - S(3);
-        int rad = (B - T) / 2 - S(2);
-        if (rad < S(4)) rad = S(4);
-        GraphicsPath path;
-        path.AddArc(L, T, rad * 2, rad * 2, 180, 90);
-        path.AddArc(R - rad * 2, T, rad * 2, rad * 2, 270, 90);
-        path.AddArc(R - rad * 2, B - rad * 2, rad * 2, rad * 2, 0, 90);
-        path.AddArc(L, B - rad * 2, rad * 2, rad * 2, 90, 90);
-        path.CloseFigure();
-        g.FillPath(&pill, &path);
-        RECT bar = {r.left + S(8), r.top + S(8), r.left + S(12), r.bottom - S(8)};
-        HBRUSH ab = CreateSolidBrush(COL_ACCENT);
-        FillRect(dc, &bar, ab);
-        DeleteObject(ab);
+        LinearGradientBrush pb(Point(L, T), Point(R, T),
+            ThColor(g_theme.dark ? 80 : 110, g_theme.accent),
+            ThColor(g_theme.dark ? 40 : 60, g_theme.accent2));
+        g.FillPath(&pb, pill);
+        Pen pe(ThColor(g_theme.dark ? 130 : 150, g_theme.accent), 1);
+        g.DrawPath(&pe, pill);
+        GraphicsPath* bp = RoundPath(L + S(3), T + S(6), L + S(7), B - S(6), S(2));
+        Pen bg2(ThColor(90, g_theme.accent), (REAL)S(4));
+        g.DrawPath(&bg2, bp);
+        SolidBrush bar(ThColor(255, g_theme.accent));
+        g.FillPath(&bar, bp);
+        delete bp;
+    } else if (hov) {
+        SolidBrush hb(ThColor(g_theme.dark ? 26 : 60, g_theme.accent));
+        g.FillPath(&hb, pill);
     }
-    // dot
-    RECT dot = {r.left + S(18), (r.top + r.bottom - S(8)) / 2, r.left + S(26), (r.top + r.bottom + S(8)) / 2};
-    HBRUSH db = CreateSolidBrush(sel ? COL_ACCENT : COL_MUTED);
-    HBRUSH ob = (HBRUSH)SelectObject(dc, db);
-    HPEN op = (HPEN)SelectObject(dc, GetStockObject(NULL_PEN));
-    Ellipse(dc, dot.left, dot.top, dot.right, dot.bottom);
-    SelectObject(dc, op);
-    SelectObject(dc, ob);
-    DeleteObject(db);
-    RECT tr = {r.left + S(36), r.top, r.right - S(8), r.bottom};
+    delete pill;
+    // icon chip
+    int csz = (B - T) - S(10);
+    if (csz < S(18)) csz = S(18);
+    int cx0 = L + S(12), cy0 = (T + B - csz) / 2;
+    GraphicsPath* chip = RoundPath(cx0, cy0, cx0 + csz, cy0 + csz, S(8));
+    if (sel) {
+        LinearGradientBrush cb(Point(cx0, cy0), Point(cx0 + csz, cy0 + csz),
+            ThColor(255, g_theme.accent), ThColor(255, g_theme.accent2));
+        g.FillPath(&cb, chip);
+    } else {
+        BYTE ca = (BYTE)((g_theme.dark ? 30 : 46) + (hov ? 26 : 0));
+        SolidBrush cb2(ThColor(ca, g_theme.accent));
+        g.FillPath(&cb2, chip);
+        Pen ce(ThColor(hov ? 170 : 80, g_theme.accent), 1);
+        g.DrawPath(&ce, chip);
+    }
+    delete chip;
     SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, sel ? COL_TEXT : COL_MUTED);
-    HFONT old = (HFONT)SelectObject(dc, g_hFont);
-    DrawTextW(dc, NavText(id), -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    HFONT old = (HFONT)SelectObject(dc, g_hFontIcon ? g_hFontIcon : g_hFontBig);
+    RECT cr = {cx0, cy0, cx0 + csz, cy0 + csz};
+    SetTextColor(dc, sel ? RGB(255, 255, 255) : RoleColor(LR_ACCENT));
+    DrawTextW(dc, NavIcon(id), -1, &cr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    RECT tr = {cx0 + csz + S(10), r.top, r.right - S(8), r.bottom};
+    SetTextColor(dc, sel ? RoleColor(LR_WHITE) : (hov ? COL_TEXT : COL_MUTED));
+    SelectObject(dc, sel ? g_hFontBig : g_hFont);
+    DrawTextW(dc, NavText(id), -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
     SelectObject(dc, old);
 }
 static void DrawCheckBtn(const DRAWITEMSTRUCT* d) {
     HDC dc = d->hDC;
     RECT r = d->rcItem;
-    HBRUSH bg = CreateSolidBrush(COL_PANEL);
-    FillRect(dc, &r, bg);
-    DeleteObject(bg);
+    BgSliceFill(dc, d->hwndItem, r);
     bool checked = SendMessageW(d->hwndItem, BM_GETCHECK, 0, 0) == BST_CHECKED;
     bool cdis = (d->itemState & ODS_DISABLED) != 0;
-    int bs = S(18);
-    RECT box = {r.left, (r.top + r.bottom - bs) / 2, r.left + bs, (r.top + r.bottom + bs) / 2};
-    HBRUSH bb = CreateSolidBrush(checked && !cdis ? COL_SELBAR : COL_EDIT);
-    FillRect(dc, &box, bb);
-    DeleteObject(bb);
-    HBRUSH fb = CreateSolidBrush(cdis ? RGB(90, 100, 130) : (checked ? COL_ACCENT : RGB(120, 140, 175)));
-    FrameRect(dc, &box, fb);
-    DeleteObject(fb);
-    if (checked) {
-        int pw = S(2); if (pw < 2) pw = 2;
-        HPEN cp = CreatePen(PS_SOLID, pw, cdis ? RGB(140, 150, 170) : COL_ACCENT);
-        HPEN ocp = (HPEN)SelectObject(dc, cp);
-        int qx = box.left + bs / 4, qy = box.top + bs / 2;
-        MoveToEx(dc, qx, qy, NULL);
-        LineTo(dc, qx + bs / 5, qy + bs / 5);
-        LineTo(dc, box.right - bs / 5, box.top + bs / 4);
-        SelectObject(dc, ocp);
-        DeleteObject(cp);
+    bool hov = !cdis && d->hwndItem == g_hotBtn;
+    Graphics g(dc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+    int tw = S(44), th = S(22);
+    int tx = r.left + S(1), ty = (r.top + r.bottom - th) / 2;
+    GraphicsPath* track = RoundPath(tx, ty, tx + tw, ty + th, th / 2);
+    if (hov) {
+        Pen halo(ThColor(80, g_theme.accent), (REAL)S(4));
+        g.DrawPath(&halo, track);
     }
+    if (checked && !cdis) {
+        LinearGradientBrush tb(Point(tx, ty), Point(tx + tw, ty),
+            ThColor(255, g_theme.accent), ThColor(255, g_theme.accent2));
+        g.FillPath(&tb, track);
+    } else {
+        SolidBrush tb2(ThColor(255, cdis ? Darken(g_theme.edit, 80) : g_theme.edit));
+        g.FillPath(&tb2, track);
+        COLORREF ec = cdis ? g_theme.muted : (hov ? g_theme.accent : g_theme.line);
+        Pen te(ThColor(cdis ? 90 : (hov ? 220 : 140), ec), 1);
+        g.DrawPath(&te, track);
+    }
+    if ((d->itemState & ODS_FOCUS) && !cdis) {
+        Pen fr(ThColor(200, g_theme.accent), 2);
+        g.DrawPath(&fr, track);
+    }
+    delete track;
+    int kd = th - S(6);
+    int kx = checked ? tx + tw - kd - S(3) : tx + S(3);
+    int ky = ty + (th - kd) / 2;
+    SolidBrush ksh(Color(90, 0, 0, 0));
+    g.FillEllipse(&ksh, kx, ky + S(1), kd, kd);
+    SolidBrush knob(ThColor(255, cdis ? RGB(140, 150, 170)
+        : (checked ? RGB(255, 255, 255) : (g_theme.dark ? RGB(170, 185, 205) : RGB(120, 135, 155)))));
+    g.FillEllipse(&knob, kx, ky, kd, kd);
     wchar_t txt[256];
     GetWindowTextW(d->hwndItem, txt, 256);
-    RECT tr = {box.right + S(8), r.top, r.right, r.bottom};
+    RECT tr = {tx + tw + S(10), r.top, r.right, r.bottom};
     SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, (d->itemState & ODS_DISABLED) ? COL_MUTED : COL_TEXT);
+    SetTextColor(dc, cdis ? COL_MUTED : COL_TEXT);
     HFONT old = (HFONT)SelectObject(dc, g_hFont);
-    DrawTextW(dc, txt, -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    DrawTextW(dc, txt, -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
     SelectObject(dc, old);
 }
 static void DrawGraph(const DRAWITEMSTRUCT* d) {
     HDC dc = d->hDC;
     RECT r = d->rcItem;
-    HBRUSH bg = CreateSolidBrush(COL_CARD);
-    FillRect(dc, &r, bg);
-    DeleteObject(bg);
+    BgSliceFill(dc, d->hwndItem, r);
     Graphics g(dc);
     g.SetSmoothingMode(SmoothingModeAntiAlias);
     int W = r.right - r.left, H = r.bottom - r.top;
+    GraphicsPath* card = RoundPath(r.left + S(1), r.top + S(1), r.right - S(1), r.bottom - S(1), S(10));
+    SolidBrush cb(ThColor(255, COL_CARD));
+    g.FillPath(&cb, card);
+    Pen ce(ThColor(150, g_theme.line), 1);
+    g.DrawPath(&ce, card);
+    g.SetClip(card);
     COLORREF cpuC = g_theme.dark ? RGB(34, 211, 238) : RGB(2, 132, 199);
     COLORREF ramC = g_theme.dark ? RGB(232, 121, 249) : RGB(192, 38, 211);
     Pen grid(g_theme.dark ? Color(60, 50, 70, 110) : Color(60, 148, 163, 184), 1);
@@ -1452,43 +1732,63 @@ static void DrawGraph(const DRAWITEMSTRUCT* d) {
         g.DrawLine(&grid, r.left, y, r.right, y);
     }
     if (g_histN > 1) {
-        Pen pCpu(ThColor(255, cpuC), 2), pRam(ThColor(255, ramC), 2);
+        Point* pts = new Point[g_histN];
         for (int s = 0; s < 2; s++) {
             const int* h = s ? g_ramHist : g_cpuHist;
-            Point* pts = new Point[g_histN];
+            COLORREF lc = s ? ramC : cpuC;
             for (int i = 0; i < g_histN; i++) {
                 int x = r.left + (W - 8) * i / 89;
                 int y = r.bottom - 6 - (H - 12) * h[i] / 100;
                 pts[i] = Point(x, y);
             }
-            // shift: show last N aligned right
             int off = r.right - 4 - (r.left + (W - 8) * (g_histN - 1) / 89);
             for (int i = 0; i < g_histN; i++) pts[i].X += off;
-            g.DrawLines(s ? &pRam : &pCpu, pts, g_histN);
-            delete[] pts;
+            GraphicsPath area;
+            area.AddLines(pts, g_histN);
+            area.AddLine(pts[g_histN - 1].X, r.bottom, pts[0].X, r.bottom);
+            area.CloseFigure();
+            LinearGradientBrush ab(Point(0, r.top), Point(0, r.bottom),
+                ThColor(70, lc), ThColor(0, lc));
+            g.FillPath(&ab, &area);
+            Pen lp(ThColor(255, lc), 2);
+            g.DrawLines(&lp, pts, g_histN);
         }
+        delete[] pts;
     }
+    g.ResetClip();
+    delete card;
     SetBkMode(dc, TRANSPARENT);
     HFONT old = (HFONT)SelectObject(dc, g_hFont);
+    SolidBrush db1(ThColor(255, cpuC)), db2(ThColor(255, ramC));
+    g.FillEllipse(&db1, r.left + S(10), r.top + S(10), S(8), S(8));
+    g.FillEllipse(&db2, r.left + S(10), r.top + S(32), S(8), S(8));
     SetTextColor(dc, cpuC);
-    RECT l1 = {r.left + 8, r.top + 6, r.left + 200, r.top + 28};
+    RECT l1 = {r.left + S(24), r.top + S(4), r.left + S(220), r.top + S(28)};
     DrawTextW(dc, WFormat(L"CPU %d%%", g_histN ? g_cpuHist[g_histN-1] : 0).c_str(), -1, &l1, DT_LEFT);
     SetTextColor(dc, ramC);
-    RECT l2 = {r.left + 8, r.top + 28, r.left + 200, r.top + 50};
+    RECT l2 = {r.left + S(24), r.top + S(26), r.left + S(220), r.top + S(50)};
     DrawTextW(dc, WFormat(L"RAM %d%%", g_histN ? g_ramHist[g_histN-1] : 0).c_str(), -1, &l2, DT_LEFT);
     SelectObject(dc, old);
 }
 static void DrawDashPic(const DRAWITEMSTRUCT* d) {
     HDC dc = d->hDC;
     RECT r = d->rcItem;
+    BgSliceFill(dc, d->hwndItem, r);
     Graphics g(dc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
     g.SetInterpolationMode(InterpolationModeHighQualityBicubic);
+    GraphicsPath* card = RoundPath(r.left + S(1), r.top + S(1), r.right - S(1), r.bottom - S(1), S(12));
+    g.SetClip(card);
     if (g_imgBanner) g.DrawImage(g_imgBanner, (INT)r.left, (INT)r.top, (INT)(r.right - r.left), (INT)(r.bottom - r.top));
     else {
-        HBRUSH b = CreateSolidBrush(COL_CARD);
-        FillRect(dc, &r, b); DeleteObject(b);
+        SolidBrush b(ThColor(255, COL_CARD));
+        g.FillPath(&b, card);
     }
-    // score text overlay
+    g.ResetClip();
+    Pen ce(ThColor(160, g_theme.line), 1);
+    g.DrawPath(&ce, card);
+    delete card;
+    // score text overlay with shadow
     SetBkMode(dc, TRANSPARENT);
     wchar_t sc[16]; StringCchPrintfW(sc, 16, L"%d", g_lastScore);
     const wchar_t* grade = L"D";
@@ -1497,17 +1797,29 @@ static void DrawDashPic(const DRAWITEMSTRUCT* d) {
     else if (g_lastScore >= 75) { grade = L"A"; gc = COL_GREEN; }
     else if (g_lastScore >= 60) { grade = L"B"; gc = COL_GREEN; }
     else if (g_lastScore >= 40) { grade = L"C"; gc = COL_YELLOW; }
-    SetTextColor(dc, RGB(255, 255, 255));
     HFONT old = (HFONT)SelectObject(dc, g_hFontHuge);
     RECT sr = {r.left + S(24), r.top + S(10), r.left + S(200), r.bottom};
+    RECT sr2 = sr; sr2.left += 2; sr2.top += 2;
+    SetTextColor(dc, RGB(0, 0, 0));
+    DrawTextW(dc, sc, -1, &sr2, DT_LEFT | DT_TOP | DT_SINGLELINE);
+    SetTextColor(dc, RGB(255, 255, 255));
     DrawTextW(dc, sc, -1, &sr, DT_LEFT | DT_TOP | DT_SINGLELINE);
     SelectObject(dc, g_hFontBig);
+    std::wstring sub = WFormat(L"/ 100   %s", T(SID_DASH_SCORE));
     RECT lr = {r.left + S(24), r.top + S(86), r.left + S(400), r.bottom};
-    DrawTextW(dc, WFormat(L"/ 100   %s", T(SID_DASH_SCORE)).c_str(), -1, &lr, DT_LEFT | DT_TOP | DT_SINGLELINE);
-    SetTextColor(dc, gc);
+    RECT lr2 = lr; lr2.left += 1; lr2.top += 1;
+    SetTextColor(dc, RGB(0, 0, 0));
+    DrawTextW(dc, sub.c_str(), -1, &lr2, DT_LEFT | DT_TOP | DT_SINGLELINE);
+    SetTextColor(dc, RGB(255, 255, 255));
+    DrawTextW(dc, sub.c_str(), -1, &lr, DT_LEFT | DT_TOP | DT_SINGLELINE);
+    std::wstring gs = WFormat(L"%s: %s", T(SID_DASH_GRADE), grade);
     SelectObject(dc, g_hFontHuge);
     RECT gr = {r.right - S(160), r.top + S(10), r.right - S(24), r.bottom};
-    DrawTextW(dc, WFormat(L"%s: %s", T(SID_DASH_GRADE), grade).c_str(), -1, &gr, DT_RIGHT | DT_TOP | DT_SINGLELINE);
+    RECT gr2 = gr; gr2.left += 2; gr2.top += 2;
+    SetTextColor(dc, RGB(0, 0, 0));
+    DrawTextW(dc, gs.c_str(), -1, &gr2, DT_RIGHT | DT_TOP | DT_SINGLELINE);
+    SetTextColor(dc, gc);
+    DrawTextW(dc, gs.c_str(), -1, &gr, DT_RIGHT | DT_TOP | DT_SINGLELINE);
     SelectObject(dc, old);
 }
 
@@ -1643,7 +1955,15 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     switch (m) {
     case WM_ERASEBKGND: {
         RECT r; GetClientRect(h, &r);
-        PaintPageBg((HDC)w, r.right - r.left, r.bottom - r.top);
+        int W = r.right - r.left, H = r.bottom - r.top;
+        PaintPageBg((HDC)w, W, H);
+        if (W > S(400)) { // hairline separators: title row + status bar
+            HPEN pen = CreatePen(PS_SOLID, 1, COL_LINE);
+            HPEN op = (HPEN)SelectObject((HDC)w, pen);
+            MoveToEx((HDC)w, S(252), S(58), NULL); LineTo((HDC)w, W - S(12), S(58));
+            MoveToEx((HDC)w, S(252), H - S(36), NULL); LineTo((HDC)w, W - S(12), H - S(36));
+            SelectObject((HDC)w, op); DeleteObject(pen);
+        }
         return 1;
     }
     case WM_CTLCOLORSTATIC: {
@@ -1678,7 +1998,9 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         if (id == IDC_S_GRAPH) { DrawGraph(d); return TRUE; }
         if (id == IDC_DASH_PIC) { DrawDashPic(d); return TRUE; }
         if (id == IDC_B_PROG || id == IDC_N_PROG) { DrawProg(d); return TRUE; }
-        if (GetWindowLongPtrW(d->hwndItem, GWLP_USERDATA) == 1) { DrawCheckBtn(d); return TRUE; }
+        LONG_PTR tag = GetWindowLongPtrW(d->hwndItem, GWLP_USERDATA);
+        if (tag == 1) { DrawCheckBtn(d); return TRUE; }
+        if (tag == BTN_SECONDARY) { DrawBtn2(d); return TRUE; }
         DrawCTA(d);
         return TRUE;
     }
@@ -2317,6 +2639,10 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
                 static int tick = 0;
                 if (++tick >= 3) { tick = 0; ProcFillList(); }
             }
+        } else if (w == 2) {
+            g_pulse++;
+            if (g_page == PAGE_BOOST && hBoostStart && !g_boosting && IsWindowVisible(hBoostStart))
+                InvalidateRect(hBoostStart, NULL, FALSE);
         }
         break;
     case WM_SIZE: {
@@ -2452,18 +2778,23 @@ bool UI_Create(HINSTANCE hInst) {
 
     hSide = CreateWindowExW(0, L"FPSBoosterSide", L"", WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN,
         0, 0, S(240), H, g_hMain, NULL, hInst, NULL);
+    g_hFontIcon = CreateFontW(-S(19), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI Emoji");
     for (int i = 0; i < PAGE_COUNT; i++) {
         HWND b = CreateWindowExW(0, WC_BUTTONW, NavText(i), WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
             S(14), S(258) + i * S(49), S(212), S(43), hSide, (HMENU)(INT_PTR)(IDC_NAV_BASE + i), hInst, NULL);
         SendMessageW(b, WM_SETFONT, (WPARAM)g_hFont, 0);
+        BtnHook(b);
     }
 
     hTitle = Mk(g_hMain, WC_STATICW, L"", WS_CHILD | WS_VISIBLE | SS_LEFT, 0,
         264, 14, 600, 34, 0, g_hFontBig);
     hLangBtn = Mk(g_hMain, WC_BUTTONW, Strings_GetLang() == 1 ? L"فا" : L"EN",
-        WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON, 0, 900, 12, 120, 32, IDC_LANG_BTN, g_hFont);
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW, 0, 900, 12, 120, 32, IDC_LANG_BTN, g_hFont);
+    SetWindowLongPtrW(hLangBtn, GWLP_USERDATA, BTN_SECONDARY); BtnHook(hLangBtn);
     hThemeBtn = Mk(g_hMain, WC_BUTTONW, L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW, 0,
         780, 12, 110, 32, IDC_THEME_BTN, g_hFontBig);
+    SetWindowLongPtrW(hThemeBtn, GWLP_USERDATA, BTN_SECONDARY); BtnHook(hThemeBtn);
     hAdminBadge = Mk(g_hMain, WC_STATICW, L"", WS_CHILD | WS_VISIBLE | SS_RIGHT, 0,
         1030, 12, 128, 32, 0, g_hFont);
 
@@ -2490,6 +2821,7 @@ bool UI_Create(HINSTANCE hInst) {
         g_isAdmin ? LR_GREEN : LR_RED);
 
     SetTimer(g_hMain, 1, 1000, NULL);
+    SetTimer(g_hMain, 2, 120, NULL); // boost-button pulse
     Hotkey_Apply();
     Theme_UpdateBtnFace();
     UI_ShowPage(PAGE_DASH);

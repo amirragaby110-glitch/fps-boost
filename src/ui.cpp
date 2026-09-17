@@ -1187,8 +1187,8 @@ static void AiAsk() {
 static void AiOnlineDone(bool ok) {
     std::wstring a;
     if (ok && AiOnline_TakeResult(a)) {
-        AiAppendBlock(WFormat(L"%s (%s):\r\n%s\r\n\r\n", T(SID_NAV_AI), T(SID_A_ONTAG), a.c_str()));
-        SetLabel(hAiStatus, WFormat(L"%s ✓", T(SID_A_ONLINE)), LR_ACCENT);
+        AiAppendBlock(WFormat(L"%s (%s \u00b7 %s):\r\n%s\r\n\r\n", T(SID_NAV_AI), T(SID_A_ONTAG), AiOnline_Provider().c_str(), a.c_str()));
+        SetLabel(hAiStatus, WFormat(L"%s \u2713 \u00b7 %s", T(SID_A_ONLINE), AiOnline_Provider().c_str()), LR_ACCENT);
     } else {
         AiOnline_TakeResult(a);
         std::wstring fb = Ai_Answer(g_aiPending);

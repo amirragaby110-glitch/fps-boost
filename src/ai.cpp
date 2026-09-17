@@ -724,9 +724,10 @@ static std::string AiUrlEncode(const std::string& in) {
 static std::wstring g_aiLastQ, g_aiLastA; // short conversation memory (online)
 // Shared WinHTTP plumbing. Returns 1 = got HTTP response (code set), 0 = network failure.
 static int AiHttp(const wchar_t* host, const wchar_t* method, const wchar_t* wpath,
-                  const char* body, DWORD bodyLen, std::string& out, DWORD& code) {
+                  const char* body, DWORD bodyLen, std::string& out, DWORD& code,
+                  const wchar_t* xhdr = NULL) {
     out.clear(); code = 0;
-    HINTERNET ses = WinHttpOpen(L"FPSBooster/2.2.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+    HINTERNET ses = WinHttpOpen(L"FPSBooster/2.3", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
         WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!ses) return 0;
     WinHttpSetTimeouts(ses, 5000, 8000, 10000, 45000);
@@ -737,6 +738,9 @@ static int AiHttp(const wchar_t* host, const wchar_t* method, const wchar_t* wpa
             WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
         if (req) {
             BOOL sent;
+            if (xhdr && *xhdr)
+                WinHttpAddRequestHeaders(req, xhdr, (ULONG)-1,
+                    WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE);
             if (body && bodyLen > 0) {
                 WinHttpAddRequestHeaders(req, L"Content-Type: application/json", (ULONG)-1,
                     WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE);
@@ -817,6 +821,7 @@ static int AiPostOpenAI(const std::wstring& q, bool fa, std::wstring& answer) {
         return 0;
     if (code == 429) return 3;
     if (code != 200 || out.empty()) return 2;
+    if (out.find("enter.pollinations") != std::string::npos) return 2; // keyless budget exhausted
     AiStripSurrogates(out);
     JVal root;
     if (!ParseJson(out, root) || root.type != JVal::OBJ) return 2;
@@ -843,6 +848,7 @@ static int AiGetPrompt(const std::wstring& q, bool fa, std::wstring& answer) {
         return 0;
     if (code == 429) return 3;
     if (code != 200 || out.empty()) return 2;
+    if (out.find("enter.pollinations") != std::string::npos) return 2; // keyless budget exhausted
     return AiCleanAnswer(out, answer) ? 1 : 2;
 }
 struct AiOnlineCtx { HWND w; std::wstring q; bool fa; };
@@ -851,21 +857,199 @@ static bool g_aiCsInit = false;
 static std::wstring g_aiRes;
 static bool g_aiOk = false;
 static LONG g_aiBusy = 0;
+// ---------- AI Horde (keyless, community-run, no geo-blocking) - primary provider ----------
+static std::wstring g_aiProv;
+static const char* kHordeModels[] = {
+    "meta-llama/Llama-3.2-3B-Instruct",
+    "koboldcpp/Llama-3.2-3B-Instruct-Q4_K_M",
+    "koboldcpp/llama-3.2-3b-instruct-q4_k_m",
+    "koboldcpp/Llama-3.2-1B-Instruct",
+    "koboldcpp/Qwen2.5-1.5B",
+    "koboldcpp/Qwen/Qwen3.5-0.8B",
+    "koboldcpp/Qwen_Qwen3-0.6B-IQ4_XS",
+};
+static const wchar_t* kHordeAgent = L"apikey: 0000000000\r\nClient-Agent: FPSBooster:2.3:fps-booster-app";
+static const wchar_t* kHordeAgentRO = L"Client-Agent: FPSBooster:2.3:fps-booster-app";
+// Attempt codes: 1 ok, 0 netfail, 2 httperr/fault, 4 busy (queue too long / timeout: fall through fast).
+static int AiHorde(const std::wstring& q, bool fa, std::wstring& answer) {
+    std::wstring sys = fa
+        ? L"تو دستیار فارسی FPS Booster هستی. خیلی کوتاه (زیر ۱۰۰ کلمه)، کاربردی و بدون مقدمه جواب بده."
+        : L"You are the FPS Booster assistant. Answer briefly (under 100 words), practical, no preamble.";
+    std::wstring specs = WFormat(fa ? L" مشخصات کاربر: %s؛ %s؛ %s؛ %s." : L" User PC: %s; %s; %s; %s.",
+        SysCpuName().c_str(), SysGpuName().c_str(), SysRamString().c_str(), SysOsString().c_str());
+    std::wstring mem;
+    if (!g_aiLastQ.empty())
+        mem = WFormat(fa ? L" گفتگوی قبلی: سوال «%s» / جواب «%s»." : L" Previous chat: Q: %s / A: %s.",
+            g_aiLastQ.c_str(), g_aiLastA.c_str());
+    std::wstring prompt = sys + specs + mem + (fa ? L" سوال: " : L" Question: ") +
+        q.substr(0, 300) + (fa ? L" جواب:" : L" Answer:");
+    std::string jb = "{\"prompt\":\"" + JsonEscapeW(prompt) + "\",\"params\":{\"n\":1,"
+        "\"max_context_length\":1024,\"max_length\":220,\"temperature\":0.7,\"top_p\":0.92,"
+        "\"top_k\":100,\"rep_pen\":1.12,\"frmttriminc\":true,"
+        "\"stop_sequence\":[\"\\n\\n\\n\",\"###\",\"Question:\",\"\\u0633\\u0648\\u0627\\u0644:\"]},"
+        "\"models\":[";
+    for (size_t i = 0; i < sizeof(kHordeModels) / sizeof(kHordeModels[0]); i++) {
+        if (i) jb += ",";
+        jb += "\""; jb += kHordeModels[i]; jb += "\"";
+    }
+    jb += "],\"slow_workers\":true}";
+    std::string out; DWORD code = 0;
+    if (!AiHttp(L"stablehorde.net", L"POST", L"/api/v2/generate/text/async",
+            jb.c_str(), (DWORD)jb.size(), out, code, kHordeAgent))
+        return 0;
+    if (code == 429) return 2;
+    if ((code != 202 && code != 200) || out.empty()) return 2;
+    AiStripSurrogates(out);
+    JVal root;
+    if (!ParseJson(out, root) || root.type != JVal::OBJ) return 2;
+    std::string id = root.str("id");
+    if (id.empty() || id.size() > 64) return 2;
+    std::string spath = "/api/v2/generate/text/status/" + id;
+    std::wstring wpathS = Utf8ToWide(spath);
+    int netfail = 0;
+    for (int i = 0; i < 20; i++) {
+        Sleep(i == 0 ? 2500 : 4000);
+        std::string st; DWORD sc = 0;
+        if (!AiHttp(L"stablehorde.net", L"GET", wpathS.c_str(), NULL, 0, st, sc, kHordeAgentRO)) {
+            if (++netfail >= 2) {
+                std::string ign; DWORD ic = 0;
+                AiHttp(L"stablehorde.net", L"DELETE", wpathS.c_str(), NULL, 0, ign, ic, kHordeAgent);
+                return 0;
+            }
+            continue;
+        }
+        netfail = 0;
+        if (sc != 200 || st.empty()) return 2;
+        AiStripSurrogates(st);
+        JVal s;
+        if (!ParseJson(st, s) || s.type != JVal::OBJ) continue;
+        if (s.boolean("faulted", false)) return 2;
+        const JVal* gs = s.find("generations");
+        bool hasText = gs && gs->type == JVal::ARR && !gs->arr.empty() &&
+            !gs->arr[0].str("text").empty();
+        bool done = hasText || s.boolean("done", false) || s.num("finished", 0) >= 1;
+        if (done) {
+            if (!hasText) return 2;
+            std::string tx = gs->arr[0].str("text");
+            static const char* stops[] = {"###", "Question:", "\n\n\n", "سوال:"};
+            for (int k = 0; k < 4; k++) {
+                size_t p = tx.find(stops[k]);
+                if (p != std::string::npos) tx.resize(p);
+            }
+            return AiCleanAnswer(tx, answer) ? 1 : 2;
+        }
+        if (s.num("wait_time", 0) > 50) { // queue too long: cancel politely, fall through
+            std::string ign; DWORD ic = 0;
+            AiHttp(L"stablehorde.net", L"DELETE", wpathS.c_str(), NULL, 0, ign, ic, kHordeAgent);
+            return 4;
+        }
+    }
+    { std::string ign; DWORD ic = 0; // overall timeout: cancel, fall through
+      AiHttp(L"stablehorde.net", L"DELETE", wpathS.c_str(), NULL, 0, ign, ic, kHordeAgent); }
+    return 4;
+}
+// ---------- Wikipedia definitions (reachable from Iran even when AI hosts are blocked) ----------
+static std::wstring AiTrimQ(std::wstring s) {
+    while (!s.empty() && (iswspace(s.front()) || s.front() == L'?' || s.front() == 0x061F ||
+            s.front() == L'\'' || s.front() == L'"')) s.erase(s.begin());
+    while (!s.empty() && (iswspace(s.back()) || s.back() == L'?' || s.back() == 0x061F ||
+            s.back() == L'.' || s.back() == L'!' || s.back() == L'\'' || s.back() == L'"')) s.pop_back();
+    return s;
+}
+static bool AiStartsWith(std::wstring& s, const wchar_t* pre) {
+    size_t n = wcslen(pre);
+    if (s.size() >= n && s.compare(0, n, pre) == 0) { s.erase(0, n); return true; }
+    return false;
+}
+static bool AiEndsWith(std::wstring& s, const wchar_t* suf) {
+    size_t n = wcslen(suf);
+    if (s.size() > n && s.compare(s.size() - n, n, suf) == 0) { s.resize(s.size() - n); return true; }
+    return false;
+}
+static bool AiWikiEntity(const std::wstring& q, bool fa, std::wstring& title) {
+    std::wstring s = AiTrimQ(ToLower(q));
+    if (s.empty()) return false;
+    bool hit = false;
+    if (fa) {
+        static const wchar_t* pres[] = {L"درباره ", L"در مورد ", L"درمورد ", L"تعریف ", L"معنی ", L"یعنی "};
+        static const wchar_t* sufs[] = {L"چیست", L"چی هست", L"کیست", L"یعنی چه", L"یعنی چی", L"چیه",
+                                        L"را تعریف کن", L"رو تعریف کن", L"تعریف کن", L"چی میشه", L"چی می‌شود"};
+        for (int i = 0; i < 6; i++) hit |= AiStartsWith(s, pres[i]);
+        s = AiTrimQ(s);
+        for (int i = 0; i < 11; i++) hit |= AiEndsWith(s, sufs[i]);
+        s = AiTrimQ(s);
+    } else {
+        static const char* pres[] = {"what is ", "what are ", "what was ", "what were ", "what's ",
+                                     "who is ", "who are ", "who was ", "who's ", "define ",
+                                     "definition of ", "meaning of ", "tell me about ", "about "};
+        std::string u8 = WideToUtf8(s);
+        std::string l = u8;
+        for (int i = 0; i < 14; i++) {
+            size_t n = strlen(pres[i]);
+            if (l.size() > n && l.compare(0, n, pres[i]) == 0) { l.erase(0, n); hit = true; break; }
+        }
+        s = Utf8ToWide(l);
+        s = AiTrimQ(s);
+        static const wchar_t* arts[] = {L"a ", L"an ", L"the "};
+        for (int i = 0; i < 3; i++) { if (AiStartsWith(s, arts[i])) break; }
+        s = AiTrimQ(s);
+    }
+    if (!hit || s.empty() || s.size() > 120) return false;
+    int words = 1;
+    for (size_t i = 0; i < s.size(); i++) if (s[i] == L' ') words++;
+    if (words > 8) return false;
+    title = s;
+    return true;
+}
+static int AiWiki(const std::wstring& q, bool fa, std::wstring& answer) {
+    std::wstring title;
+    if (!AiWikiEntity(q, fa, title)) return 2;
+    for (size_t i = 0; i < title.size(); i++) if (title[i] == L' ') title[i] = L'_';
+    std::string path = "/api/rest_v1/page/summary/" + AiUrlEncode(WideToUtf8(title));
+    const wchar_t* host = fa ? L"fa.wikipedia.org" : L"en.wikipedia.org";
+    std::string out; DWORD code = 0;
+    if (!AiHttp(host, L"GET", Utf8ToWide(path).c_str(), NULL, 0, out, code))
+        return 0;
+    if (code != 200 || out.empty()) return 2;
+    AiStripSurrogates(out);
+    JVal root;
+    if (!ParseJson(out, root) || root.type != JVal::OBJ) return 2;
+    if (root.str("type") == "disambiguation") return 2;
+    std::string ex = root.str("extract");
+    if (ex.size() < 40) return 2;
+    if (ex.size() > 620) {
+        size_t cut = 620;
+        for (size_t i = 620; i > 300; i--) {
+            if (ex[i] == '.' || ex[i] == '!' || ex[i] == '?') { cut = i + 1; break; }
+            if (ex[i] == (char)0x9F && i > 0 && ex[i-1] == (char)0xDB) { cut = i + 1; break; }
+        }
+        while (cut < ex.size() && ((unsigned char)ex[cut] & 0xC0) == 0x80) cut++;
+        ex.resize(cut);
+    }
+    return AiCleanAnswer(ex, answer) ? 1 : 2;
+}
 static DWORD WINAPI AiOnlineThread(LPVOID arg) {
     AiOnlineCtx* c = (AiOnlineCtx*)arg;
     std::wstring a;
-    int r = AiPostOpenAI(c->q, c->fa, a);
-    if (r == 2 || r == 3) {
-        int r2 = AiGetPrompt(c->q, c->fa, a);
-        if (r2 == 1) r = 1;
-        else if (r2 == 3) r = 3;
-        else if (r == 2) r = r2;
+    // Sanction-proof cascade: Horde -> Pollinations POST -> Pollinations GET -> Wiki -> retry/refresh
+    int r = AiHorde(c->q, c->fa, a);
+    if (r == 1) g_aiProv = L"Horde";
+    else {
+        int pr = AiPostOpenAI(c->q, c->fa, a);
+        if (pr == 2) pr = AiGetPrompt(c->q, c->fa, a);
+        if (pr == 1) g_aiProv = L"Pollinations";
+        else {
+            int wr = AiWiki(c->q, c->fa, a);
+            if (wr == 1) { pr = 1; g_aiProv = L"Wiki"; }
+        }
+        r = pr;
     }
     if (r == 3) {
         PostMessageW(c->w, WM_APP_AI, 2, 0); // rate limited: wait out the window, retry once
         Sleep(16000);
         r = AiPostOpenAI(c->q, c->fa, a);
         if (r == 2) r = AiGetPrompt(c->q, c->fa, a);
+        if (r == 1) g_aiProv = L"Pollinations";
     }
     bool ok = (r == 1);
     if (!g_aiCsInit) { InitializeCriticalSection(&g_aiCs); g_aiCsInit = true; }
@@ -889,6 +1073,7 @@ bool AiOnline_AskAsync(HWND w, const std::wstring& q) {
     InterlockedExchange(&g_aiBusy, 0);
     return false;
 }
+std::wstring AiOnline_Provider() { return g_aiProv.empty() ? L"Online" : g_aiProv; }
 bool AiOnline_TakeResult(std::wstring& a) {
     if (!g_aiCsInit) return false;
     EnterCriticalSection(&g_aiCs);

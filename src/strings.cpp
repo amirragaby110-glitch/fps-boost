@@ -40,7 +40,7 @@ static const StrRow kRows[] = {
 {SID_BTN_SAVE, "Save", "ذخیره"},
 {SID_BTN_CANCEL, "Cancel", "انصراف"},
 {SID_STATUS_READY, "Ready", "آماده"},
-{SID_VER, "Version 2.2.0", "نسخه 2.2.0"},
+{SID_VER, "Version 2.3.0", "نسخه 2.3.0"},
 
 {SID_DASH_TITLE, "Dashboard", "داشبورد"},
 {SID_DASH_SUB, "Your PC optimization status at a glance", "وضعیت بهینه‌سازی سیستم شما در یک نگاه"},
@@ -163,7 +163,7 @@ static const StrRow kRows[] = {
 {SID_SET_STARTUP, "Start with Windows", "اجرا همراه ویندوز"},
 {SID_SET_FOLDER, "Open data folder", "باز کردن پوشه داده‌ها"},
 {SID_SET_RESET, "Reset all settings", "بازنشانی همه تنظیمات"},
-{SID_SET_ABOUT, "FPS Booster Pro 2.2.0 - Ultimate Game FPS Optimizer", "FPS Booster Pro نسخه 2.2.0 - بهینه‌ساز نهایی اف‌پی‌اس بازی"},
+{SID_SET_ABOUT, "FPS Booster Pro 2.3.0 - Ultimate Game FPS Optimizer", "FPS Booster Pro نسخه 2.3.0 - بهینه‌ساز نهایی اف‌پی‌اس بازی"},
 {SID_SET_CONFIRM_RESET, "Reset all settings and revert all tweaks?", "همه تنظیمات بازنشانی و همه توییک‌ها برگردانده شود؟"},
 {SID_SET_RESTART_LANG, "Language will apply after restart.", "زبان بعد از اجرای مجدد اعمال می‌شود."},
 

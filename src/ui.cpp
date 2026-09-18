@@ -572,7 +572,7 @@ static int g_gameSel = -1;
 static bool g_gamesLoading = false;
 static HWND hBoostLog, hBoostProg, hBoostStart, hBoostUndo, hBoostMax;
 static HWND hTweakList, hTweakDetail, hTweakApply, hTweakRevert, hTweakAll, hTweakUndoAll;
-static HWND hSysCpu, hSysRam, hSysUp, hSysTimer, hSysGraph;
+static HWND hSysCpu, hSysRam, hSysUp, hSysTimer, hSysGraph, hSysHw;
 static HWND hHelpText;
 static HWND hProcList, hProcHint, hProcStatus, hProcMB = NULL;
 static int ProcLockMB() {
@@ -582,11 +582,13 @@ static int ProcLockMB() {
 }
 static HWND hSetLang, hSetTray, hSetStartup;
 static HWND hSetStList = NULL;
-static int g_cpuHist[90], g_ramHist[90], g_histN = 0;
+static int g_cpuHist[90], g_gpuHist[90], g_ramHist[90], g_histN = 0;
+static HWND hMonVal[6], hMonCap[6], hMonMma[6];
 static CpuMeter* g_meter = NULL;
 
 // ---------- Dashboard ----------
 static const char* kDashTweaks[] = {"gamemode", "hags", "powerplan", "gamedvr", "visualfx", "mouseaccel"};
+static void DashLive();
 static void DashRefresh() {
     int ap = 0, tt = 0;
     g_lastScore = Tweaks_Score(&ap, &tt);
@@ -618,26 +620,88 @@ static void DashRefresh() {
     SYSTEMTIME st; GetLocalTime(&st);
     StrId tips[] = {SID_TIP1, SID_TIP2, SID_TIP3, SID_TIP4, SID_TIP5};
     SetWindowTextW(hDashTip, WFormat(L"%s: %s", T(SID_DASH_TIP), T(tips[st.wDay % 5])).c_str());
+    DashLive();
+}
+static std::wstring PctOrDash(int v) { return v < 0 ? std::wstring(L"--") : WFormat(L"%d%%", v); }
+static std::wstring RateStr(int kb) {
+    if (kb >= 1024) return WFormat(L"%.1f MB/s", kb / 1024.0);
+    return WFormat(L"%d KB/s", kb);
+}
+static void MonMmaSet(int i, int id, const wchar_t* unit) {
+    int mn, mx, av;
+    MonMinMaxAvg(id, &mn, &mx, &av);
+    if (mn < 0) { SetLabel(hMonMma[i], T(SID_NA), LR_MUTED); return; }
+    SetLabel(hMonMma[i], WFormat(L"%s %d · %s %d · %s %d%s", T(SID_MON_MIN), mn,
+        T(SID_MON_MAX), mx, T(SID_MON_AVG), av, unit), LR_MUTED);
+}
+static void DashLive() {
+    if (!hMonVal[0]) return;
+    int cpu = MonCpu();
+    SetLabel(hMonVal[0], PctOrDash(cpu), cpu > 85 ? LR_RED : LR_TEXT);
+    { std::wstring s; int mhz = MonCpuMhz(), t = MonCpuTempC();
+      if (mhz > 0) s += WFormat(L"%.2f GHz", mhz / 1000.0);
+      if (t >= 0) { if (!s.empty()) s += L" · "; s += WFormat(L"%d°C", t); }
+      if (s.empty()) s = T(SID_NA);
+      SetLabel(hMonCap[0], WFormat(L"CPU · %s", s.c_str()), LR_MUTED); }
+    MonMmaSet(0, MON_CPU, L"%");
+    int gpu = MonGpu();
+    SetLabel(hMonVal[1], PctOrDash(gpu), LR_TEXT);
+    { std::wstring s; int t = MonGpuTempC(), mu = MonGpuMemUsedMB(), mt = MonGpuMemTotalMB();
+      if (t >= 0) s += WFormat(L"%d°C", t);
+      if (mu >= 0 && mt > 0) { if (!s.empty()) s += L" · ";
+        s += WFormat(L"%.1f/%.1f GB", mu / 1024.0, mt / 1024.0); }
+      else if (mt > 0) { if (!s.empty()) s += L" · ";
+        s += WFormat(L"%.1f GB %s", mt / 1024.0, T(SID_HW_VRAM)); }
+      if (s.empty()) s = T(SID_NA);
+      SetLabel(hMonCap[1], WFormat(L"GPU · %s", s.c_str()), LR_MUTED); }
+    MonMmaSet(1, MON_GPU, L"%");
+    int ram = MonRam();
+    SetLabel(hMonVal[2], PctOrDash(ram), ram > 90 ? LR_RED : LR_TEXT);
+    { std::wstring s = WFormat(L"%.1f GB %s", MonRamAvailMB() / 1024.0, T(SID_HW_AVAIL));
+      int cc = MonRamCachedMB();
+      if (cc >= 0) s += WFormat(L" · %.1f GB %s", cc / 1024.0, T(SID_HW_CACHED));
+      SetLabel(hMonCap[2], WFormat(L"RAM · %s", s.c_str()), LR_MUTED); }
+    MonMmaSet(2, MON_RAM, L"%");
+    int dk = MonDisk();
+    SetLabel(hMonVal[3], PctOrDash(dk), LR_TEXT);
+    SetLabel(hMonCap[3], WFormat(L"%s · %d GB %s", T(SID_MON_DISK),
+        MonDiskFreeGB(), T(SID_HW_AVAIL)), LR_MUTED);
+    MonMmaSet(3, MON_DISK, L"%");
+    SetLabel(hMonVal[4], RateStr(MonDownKBs()), LR_TEXT);
+    SetLabel(hMonCap[4], WFormat(L"%s · \u2191 %s", T(SID_MON_NET),
+        RateStr(MonUpKBs()).c_str()), LR_MUTED);
+    MonMmaSet(4, MON_NET, L" KB/s");
+    int ping = MonPingMs();
+    SetLabel(hMonVal[5], ping < 0 ? std::wstring(L"--") : WFormat(L"%d ms", ping), LR_TEXT);
+    SetLabel(hMonCap[5], WFormat(L"%s · 1.1.1.1", T(SID_MON_PING)), LR_MUTED);
+    MonMmaSet(5, MON_PING, L" ms");
 }
 static void BuildDash(HWND p) {
-    hDashPic = Mk(p, WC_STATICW, L"", WS_CHILD | WS_VISIBLE | SS_OWNERDRAW, 0, 0, 0, 892, 150, IDC_DASH_PIC, NULL);
-    MkHeader(p, 0, 158, 430, SID_DASH_SYSTEM);
+    hDashPic = Mk(p, WC_STATICW, L"", WS_CHILD | WS_VISIBLE | SS_OWNERDRAW, 0, 0, 0, 892, 96, IDC_DASH_PIC, NULL);
     for (int i = 0; i < 6; i++) {
-        HWND n = MkLabel(p, 0, 188 + i * 30, 150, 24);
+        int x = (i % 3) * 299, y = 104 + (i / 3) * 70;
+        hMonVal[i] = MkLabel(p, x, y, 293, 30, g_hFontBig);
+        hMonCap[i] = MkLabel(p, x, y + 30, 293, 20);
+        hMonMma[i] = MkLabel(p, x, y + 50, 293, 20);
+        SetLabel(hMonVal[i], L"--", LR_TEXT);
+    }
+    MkHeader(p, 0, 248, 430, SID_DASH_SYSTEM);
+    for (int i = 0; i < 6; i++) {
+        HWND n = MkLabel(p, 0, 278 + i * 26, 150, 24);
         SetLabel(n, L"", LR_MUTED);
         static StrId ids[] = {SID_DASH_CPU, SID_DASH_GPU, SID_DASH_RAM, SID_DASH_OS, SID_DASH_POWER, SID_DASH_DISPLAY};
         SetWindowTextW(n, WFormat(L"%s:", T(ids[i])).c_str());
-        hDashSys[i] = MkLabel(p, 150, 188 + i * 30, 290, 24);
+        hDashSys[i] = MkLabel(p, 150, 278 + i * 26, 290, 24);
     }
-    MkHeader(p, 452, 158, 440, SID_DASH_STATUS);
+    MkHeader(p, 452, 248, 440, SID_DASH_STATUS);
     for (int i = 0; i < 6; i++) {
-        hDashNames[i] = MkLabel(p, 452, 188 + i * 30, 300, 24);
-        hDashVals[i] = MkLabel(p, 752, 188 + i * 30, 140, 24);
+        hDashNames[i] = MkLabel(p, 452, 278 + i * 26, 300, 24);
+        hDashVals[i] = MkLabel(p, 752, 278 + i * 26, 140, 24);
     }
-    MkCTA(p, IDC_DASH_BOOST, 0, 380, 300, 56, SID_DASH_BOOST);
-    hDashInfo1 = MkLabel(p, 320, 388, 250, 24, g_hFontBig);
-    hDashInfo2 = MkLabel(p, 320, 416, 560, 24);
-    hDashTip = MkEdit(p, 0, 0, 448, 892, 120, true, true);
+    MkCTA(p, IDC_DASH_BOOST, 0, 440, 300, 52, SID_DASH_BOOST);
+    hDashInfo1 = MkLabel(p, 320, 444, 250, 24, g_hFontBig);
+    hDashInfo2 = MkLabel(p, 320, 470, 560, 24);
+    hDashTip = MkEdit(p, 0, 0, 498, 892, 96, true, true);
 }
 
 // ---------- Games ----------
@@ -838,24 +902,73 @@ static void BuildTweaks(HWND p) {
 // ---------- System ----------
 static HWND hSysRes = NULL;
 static HWND hSysGpu = NULL;
+static void SysHwText() {
+    std::wstring t;
+    t += WFormat(L"%s: %s", T(SID_DASH_CPU), SysCpuName().c_str());
+    if (MonCpuCores() > 0)
+        t += WFormat(L" · %d %s / %d %s", MonCpuCores(), T(SID_HW_CORES),
+            MonCpuThreads(), T(SID_HW_THREADS));
+    if (MonCpuBaseMhz() > 0)
+        t += WFormat(L" · %s %.2f GHz", T(SID_HW_BASE), MonCpuBaseMhz() / 1000.0);
+    if (MonCpuMhz() > 0)
+        t += WFormat(L" · %s %.2f GHz", T(SID_HW_CUR), MonCpuMhz() / 1000.0);
+    if (MonCpuTempC() >= 0) t += WFormat(L" · %d°C", MonCpuTempC());
+    t += L"\r\n";
+    t += WFormat(L"%s: %s", T(SID_DASH_GPU), SysGpuName().c_str());
+    if (MonGpuMemTotalMB() > 0)
+        t += WFormat(L" · %.1f GB %s", MonGpuMemTotalMB() / 1024.0, T(SID_HW_VRAM));
+    if (!MonGpuDriver().empty())
+        t += WFormat(L" · %s %s", T(SID_HW_DRIVER), MonGpuDriver().c_str());
+    if (MonGpuTempC() >= 0)
+        t += WFormat(L" · %s %d°C", T(SID_HW_TEMP), MonGpuTempC());
+    if (MonGpuClockMhz() > 0)
+        t += WFormat(L" · %s %.2f GHz", T(SID_HW_CLOCK), MonGpuClockMhz() / 1000.0);
+    if (MonGpuPowerW() >= 0)
+        t += WFormat(L" · %s %d W", T(SID_HW_POWER), MonGpuPowerW());
+    if (MonGpuFanPct() >= 0)
+        t += WFormat(L" · %s %d%%", T(SID_HW_FAN), MonGpuFanPct());
+    t += L"\r\n";
+    t += WFormat(L"%s: %.1f GB", T(SID_DASH_RAM), RamTotalMB() / 1024.0);
+    t += WFormat(L" · %.1f GB %s", MonRamAvailMB() / 1024.0, T(SID_HW_AVAIL));
+    if (MonRamCachedMB() >= 0)
+        t += WFormat(L" · %.1f GB %s", MonRamCachedMB() / 1024.0, T(SID_HW_CACHED));
+    if (MonRamSpeedMHz() > 0)
+        t += WFormat(L" · %s %d MHz", T(SID_HW_SPEED), MonRamSpeedMHz());
+    if (!MonRamType().empty())
+        t += WFormat(L" · %s %s", T(SID_HW_TYPE), MonRamType().c_str());
+    t += L"\r\n";
+    t += WFormat(L"%s: %s\r\n", T(SID_HW_DRIVES), MonDrives().c_str());
+    t += WFormat(L"%s: %s", T(SID_HW_DISPLAY), MonDisplay().c_str());
+    SetWindowTextW(hSysHw, t.c_str());
+}
 static void SysRefresh() {
-    if (!g_meter) g_meter = new CpuMeter();
-    int cpu = g_meter->sample();
-    int ram = RamUsagePercent();
-    if (g_histN < 90) { g_cpuHist[g_histN] = cpu; g_ramHist[g_histN] = ram; g_histN++; }
-    else {
-        memmove(g_cpuHist, g_cpuHist + 1, sizeof(int) * 89);
-        memmove(g_ramHist, g_ramHist + 1, sizeof(int) * 89);
-        g_cpuHist[89] = cpu; g_ramHist[89] = ram;
-    }
-    SetLabel(hSysCpu, WFormat(L"%s: %d%%", T(SID_S_CPU), cpu), cpu > 85 ? LR_RED : LR_TEXT);
-    SetLabel(hSysRam, WFormat(L"%s: %d%%  (%d MB %s)", T(SID_S_RAM), ram, RamAvailMB(),
-        Strings_GetLang() == 1 ? L"آزاد" : L"free"), ram > 90 ? LR_RED : LR_TEXT);
+    MonHistGet(MON_CPU, g_cpuHist);
+    MonHistGet(MON_GPU, g_gpuHist);
+    MonHistGet(MON_RAM, g_ramHist);
+    g_histN = MonHistN();
+    int cpu = MonCpu(), ram = MonRam();
+    std::wstring cs = WFormat(L"%s: %d%%", T(SID_S_CPU), cpu);
+    if (MonCpuMhz() > 0) cs += WFormat(L" · %.2f GHz", MonCpuMhz() / 1000.0);
+    if (MonCpuTempC() >= 0) cs += WFormat(L" · %d°C", MonCpuTempC());
+    SetLabel(hSysCpu, cs, cpu > 85 ? LR_RED : LR_TEXT);
+    std::wstring rs = WFormat(L"%s: %d%%  (%.1f GB %s)", T(SID_S_RAM), ram,
+        MonRamAvailMB() / 1024.0, T(SID_HW_AVAIL));
+    if (MonRamCachedMB() >= 0)
+        rs += WFormat(L" · %.1f GB %s", MonRamCachedMB() / 1024.0, T(SID_HW_CACHED));
+    SetLabel(hSysRam, rs, ram > 90 ? LR_RED : LR_TEXT);
     SetLabel(hSysUp, WFormat(L"%s: %s", T(SID_S_UPTIME), SysUptimeString().c_str()), LR_TEXT);
     ULONG cur = 0, mn = 0, mx = 0;
     if (TimerQuery(cur, mn, mx))
         SetLabel(hSysTimer, WFormat(L"%s: %.1f ms", T(SID_S_TIMER), cur / 10000.0), LR_TEXT);
-    if (hSysGpu) SetLabel(hSysGpu, WFormat(L"%s: %s", T(SID_S_GPU), SysGpuName().c_str()), LR_TEXT);
+    if (hSysGpu) {
+        std::wstring gs = WFormat(L"%s: %s", T(SID_S_GPU), SysGpuName().c_str());
+        if (MonGpu() >= 0) gs += WFormat(L" · %d%%", MonGpu());
+        if (MonGpuTempC() >= 0) gs += WFormat(L" · %d°C", MonGpuTempC());
+        if (MonGpuClockMhz() > 0) gs += WFormat(L" · %d MHz", MonGpuClockMhz());
+        if (MonGpuPowerW() >= 0) gs += WFormat(L" · %d W", MonGpuPowerW());
+        SetLabel(hSysGpu, gs, LR_TEXT);
+    }
+    if (hSysHw) SysHwText();
     if (hSysGraph) InvalidateRect(hSysGraph, NULL, TRUE);
 }
 static void BuildSystem(HWND p) {
@@ -865,13 +978,13 @@ static void BuildSystem(HWND p) {
     hSysTimer = MkLabel(p, 452, 34, 440, 30);
     hSysGpu = MkLabel(p, 0, 66, 892, 24);
     hSysGraph = Mk(p, WC_STATICW, L"", WS_CHILD | WS_VISIBLE | SS_OWNERDRAW | WS_BORDER, 0,
-        0, 92, 892, 312, IDC_S_GRAPH, NULL);
-    MkButton(p, IDC_S_CLEANRAM, 0, 416, 220, 38, SID_S_CLEAN_RAM);
-    MkButton(p, IDC_S_CLEANTEMP, 232, 416, 220, 38, SID_S_CLEAN_TEMP);
-    MkButton(p, IDC_S_REFRESH, 464, 416, 240, 38, SID_S_MAXREFRESH);
-    MkButton(p, IDC_S_COPY, 716, 416, 176, 38, SID_S_COPY);
-    HWND lr = MkLabel(p, 0, 466, 130, 28); SetWindowTextW(lr, T(SID_S_RES));
-    hSysRes = MkCombo(p, IDC_S_RES, 140, 464, 200);
+        0, 92, 892, 250, IDC_S_GRAPH, NULL);
+    MkButton(p, IDC_S_CLEANRAM, 0, 350, 220, 36, SID_S_CLEAN_RAM);
+    MkButton(p, IDC_S_CLEANTEMP, 232, 350, 220, 36, SID_S_CLEAN_TEMP);
+    MkButton(p, IDC_S_REFRESH, 464, 350, 240, 36, SID_S_MAXREFRESH);
+    MkButton(p, IDC_S_COPY, 716, 350, 176, 36, SID_S_COPY);
+    HWND lr = MkLabel(p, 0, 394, 130, 28); SetWindowTextW(lr, T(SID_S_RES));
+    hSysRes = MkCombo(p, IDC_S_RES, 140, 392, 200);
     const wchar_t* res[] = {L"1280x720", L"1366x768", L"1600x900", L"1920x1080", L"2560x1440", L"3840x2160"};
     int cw = 0, chh = 0; GetCurrentResolution(cw, chh);
     int sel = 3;
@@ -881,8 +994,9 @@ static void BuildSystem(HWND p) {
         if (swscanf(res[i], L"%dx%d", &w2, &h2) == 2 && w2 == cw && h2 == chh) sel = i;
     }
     SendMessageW(hSysRes, CB_SETCURSEL, sel, 0);
-    MkButton(p, IDC_S_RESAPPLY, 352, 464, 130, 32, SID_S_RES_APPLY);
-    MkButton(p, IDC_S_RESNATIVE, 494, 464, 130, 32, SID_S_RES_NATIVE);
+    MkButton(p, IDC_S_RESAPPLY, 352, 392, 130, 32, SID_S_RES_APPLY);
+    MkButton(p, IDC_S_RESNATIVE, 494, 392, 130, 32, SID_S_RES_NATIVE);
+    hSysHw = MkEdit(p, IDC_S_HWINFO, 0, 428, 892, 132, true, true);
 }
 
 // ---------- Help ----------
@@ -1709,6 +1823,7 @@ static void DrawGraph(const DRAWITEMSTRUCT* d) {
     g.DrawPath(&ce, card);
     g.SetClip(card);
     COLORREF cpuC = g_theme.dark ? RGB(34, 211, 238) : RGB(2, 132, 199);
+    COLORREF gpuC = g_theme.dark ? RGB(52, 211, 153) : RGB(5, 150, 105);
     COLORREF ramC = g_theme.dark ? RGB(232, 121, 249) : RGB(192, 38, 211);
     Pen grid(g_theme.dark ? Color(60, 50, 70, 110) : Color(60, 148, 163, 184), 1);
     for (int i = 1; i < 4; i++) {
@@ -1717,12 +1832,15 @@ static void DrawGraph(const DRAWITEMSTRUCT* d) {
     }
     if (g_histN > 1) {
         Point* pts = new Point[g_histN];
-        for (int s = 0; s < 2; s++) {
-            const int* h = s ? g_ramHist : g_cpuHist;
-            COLORREF lc = s ? ramC : cpuC;
+        const int* hs[3] = {g_cpuHist, g_gpuHist, g_ramHist};
+        COLORREF cs[3] = {cpuC, gpuC, ramC};
+        for (int s = 0; s < 3; s++) {
+            const int* h = hs[s];
+            COLORREF lc = cs[s];
             for (int i = 0; i < g_histN; i++) {
+                int v = h[i] < 0 ? 0 : h[i];
                 int x = r.left + (W - 8) * i / 89;
-                int y = r.bottom - 6 - (H - 12) * h[i] / 100;
+                int y = r.bottom - 6 - (H - 12) * v / 100;
                 pts[i] = Point(x, y);
             }
             int off = r.right - 4 - (r.left + (W - 8) * (g_histN - 1) / 89);
@@ -1743,14 +1861,19 @@ static void DrawGraph(const DRAWITEMSTRUCT* d) {
     delete card;
     SetBkMode(dc, TRANSPARENT);
     HFONT old = (HFONT)SelectObject(dc, g_hFont);
-    SolidBrush db1(ThColor(255, cpuC)), db2(ThColor(255, ramC));
+    SolidBrush db1(ThColor(255, cpuC)), db2(ThColor(255, gpuC)), db3(ThColor(255, ramC));
     g.FillEllipse(&db1, r.left + S(10), r.top + S(10), S(8), S(8));
     g.FillEllipse(&db2, r.left + S(10), r.top + S(32), S(8), S(8));
+    g.FillEllipse(&db3, r.left + S(10), r.top + S(54), S(8), S(8));
     SetTextColor(dc, cpuC);
     RECT l1 = {r.left + S(24), r.top + S(4), r.left + S(220), r.top + S(28)};
     DrawTextW(dc, WFormat(L"CPU %d%%", g_histN ? g_cpuHist[g_histN-1] : 0).c_str(), -1, &l1, DT_LEFT);
+    SetTextColor(dc, gpuC);
+    RECT l1b = {r.left + S(24), r.top + S(26), r.left + S(220), r.top + S(50)};
+    int gl = g_histN ? g_gpuHist[g_histN-1] : -1;
+    DrawTextW(dc, gl < 0 ? L"GPU --" : WFormat(L"GPU %d%%", gl).c_str(), -1, &l1b, DT_LEFT);
     SetTextColor(dc, ramC);
-    RECT l2 = {r.left + S(24), r.top + S(26), r.left + S(220), r.top + S(50)};
+    RECT l2 = {r.left + S(24), r.top + S(48), r.left + S(220), r.top + S(72)};
     DrawTextW(dc, WFormat(L"RAM %d%%", g_histN ? g_ramHist[g_histN-1] : 0).c_str(), -1, &l2, DT_LEFT);
     SelectObject(dc, old);
 }
@@ -2621,7 +2744,9 @@ LRESULT CALLBACK UI_MainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         break;
     case WM_TIMER:
         if (w == 1) {
+            MonSample();
             if (g_page == PAGE_SYSTEM) SysRefresh();
+            else if (g_page == PAGE_DASH) DashLive();
             else if (g_page == PAGE_PROC) {
                 static int tick = 0;
                 if (++tick >= 3) { tick = 0; ProcFillList(); }

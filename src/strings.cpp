@@ -40,7 +40,11 @@ static const StrRow kRows[] = {
 {SID_BTN_SAVE, "Save", "ذخیره"},
 {SID_BTN_CANCEL, "Cancel", "انصراف"},
 {SID_STATUS_READY, "Ready", "آماده"},
-{SID_VER, "Version 3.2.1", "نسخه 3.2.1"},
+#ifdef WIN7_BUILD
+{SID_VER, "Version 4.0.0 Win7", "نسخه 4.0.0 ویندوز 7"},
+#else
+{SID_VER, "Version 4.0.0", "نسخه 4.0.0"},
+#endif
 
 {SID_DASH_TITLE, "Dashboard", "داشبورد"},
 {SID_DASH_SUB, "Your PC optimization status at a glance", "وضعیت بهینه‌سازی سیستم شما در یک نگاه"},
@@ -163,7 +167,11 @@ static const StrRow kRows[] = {
 {SID_SET_STARTUP, "Start with Windows", "اجرا همراه ویندوز"},
 {SID_SET_FOLDER, "Open data folder", "باز کردن پوشه داده‌ها"},
 {SID_SET_RESET, "Reset all settings", "بازنشانی همه تنظیمات"},
-{SID_SET_ABOUT, "FPS Booster Pro 3.2.1 - Ultimate Game FPS Optimizer", "FPS Booster Pro نسخه 3.2.1 - بهینه‌ساز نهایی اف‌پی‌اس بازی"},
+#ifdef WIN7_BUILD
+{SID_SET_ABOUT, "FPS Booster Pro 4.0.0 (Windows 7 Legacy) - Ultimate Game FPS Optimizer", "FPS Booster Pro نسخه 4.0.0 (ویژه ویندوز 7) - بهینه‌ساز نهایی اف‌پی‌اس بازی"},
+#else
+{SID_SET_ABOUT, "FPS Booster Pro 4.0.0 - Ultimate Game FPS Optimizer", "FPS Booster Pro نسخه 4.0.0 - بهینه‌ساز نهایی اف‌پی‌اس بازی"},
+#endif
 {SID_SET_CONFIRM_RESET, "Reset all settings and revert all tweaks?", "همه تنظیمات بازنشانی و همه توییک‌ها برگردانده شود؟"},
 {SID_SET_RESTART_LANG, "Language will apply after restart.", "زبان بعد از اجرای مجدد اعمال می‌شود."},
 
@@ -285,9 +293,31 @@ static const StrRow kRows[] = {
 {SID_N_DNS_ELECTRO, "Electro (78.157.42.100)", "الکترو (78.157.42.100)"},
 {SID_N_DNS_ADGUARD, "AdGuard (94.140.14.14)", "AdGuard (94.140.14.14)"},
 {SID_N_COPY, "Copy results", "کپی نتایج"},
+{SID_MON_MIN, "Min", "حداقل"},
+{SID_MON_MAX, "Max", "حداکثر"},
+{SID_MON_AVG, "Avg", "میانگین"},
+{SID_MON_DISK, "Disk", "دیسک"},
+{SID_MON_NET, "Net", "شبکه"},
+{SID_MON_PING, "Ping", "پینگ"},
+{SID_HW_CORES, "cores", "هسته"},
+{SID_HW_THREADS, "threads", "رشته"},
+{SID_HW_BASE, "base", "پایه"},
+{SID_HW_CUR, "now", "فعلی"},
+{SID_HW_TEMP, "temp", "دما"},
+{SID_HW_VRAM, "VRAM", "VRAM"},
+{SID_HW_DRIVER, "driver", "درایور"},
+{SID_HW_CLOCK, "clock", "کلاک"},
+{SID_HW_POWER, "power", "توان"},
+{SID_HW_FAN, "fan", "فن"},
+{SID_HW_AVAIL, "free", "آزاد"},
+{SID_HW_CACHED, "cached", "کش"},
+{SID_HW_SPEED, "speed", "سرعت"},
+{SID_HW_TYPE, "type", "نوع"},
+{SID_HW_DRIVES, "Drives", "درایوها"},
+{SID_HW_DISPLAY, "Display", "نمایشگر"},
 {SID_N_CANCELLED, "Cancelled", "لغو شد"},
 {SID_NEW_TITLE, "What's new", "چه چیز جدید است"},
-{SID_NEW_BODY, "From now on, every new version announces itself with this message.\n\n- Internet page: fixed speed test with live ping, download, upload and gaming grade\n- 7 one-click gaming DNS options, including Electro and AdGuard\n- Your version number is always visible at the bottom of the sidebar", "از این به بعد هر نسخه جدید با همین پیام خودش را معرفی می‌کند.\n\n- صفحه اینترنت: تست سرعت سالم با پینگ، دانلود و آپلود زنده و نمره گیمینگ\n- ۷ گزینه DNS گیمینگ با یک کلیک، از جمله الکترو و AdGuard\n- شماره نسخه همیشه پایین سایدبار دیده می‌شود"},
+{SID_NEW_BODY, "Dashboard 2.0: live CPU/GPU/RAM/Disk/Net/Ping tiles with min/max/average.\n\n- System page: full hardware report (clocks, temps, VRAM, driver, power, fan, drives, display)\n- GPU monitoring via NVIDIA NVML / AMD ADL / Windows counters - everything shown is real data\n- Separate Windows 7 legacy build now available", "داشبورد 2: کاشی‌های زنده CPU/GPU/RAM/دیسک/شبکه/پینگ با حداقل/حداکثر/میانگین.\n\n- صفحه سیستم: گزارش کامل سخت‌افزار (کلاک، دما، VRAM، درایور، توان، فن، درایوها، نمایشگر)\n- مانیتورینگ GPU با NVML انویدیا / ADL ای‌ام‌دی / شمارنده‌های ویندوز - همه اعداد واقعی‌اند\n- نسخه جداگانه ویژه ویندوز 7 عرضه شد"},
 
 };
 

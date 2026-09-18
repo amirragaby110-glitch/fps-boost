@@ -78,22 +78,24 @@ bool Proc_Boost(DWORD pid, std::wstring& msg) {
     }
     bool prio = SetPriorityClass(h, HIGH_PRIORITY_CLASS) != FALSE;
     // Disable efficiency-mode throttling (Win10+), best effort.
+    // Loaded dynamically: SetProcessInformation does not exist on Windows 7
+    // and a static import would stop the exe from starting there.
     bool eco = false;
-#ifdef PROCESS_POWER_THROTTLING_CURRENT_VERSION
-    PROCESS_POWER_THROTTLING_STATE st;
-    ZeroMemory(&st, sizeof(st));
-    st.Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION;
-    st.ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED;
-    st.StateMask = 0; // 0 = want full speed, no eco throttling
-    eco = SetProcessInformation(h, ProcessPowerThrottling, &st, sizeof(st)) != FALSE;
-#else
-    PROCESS_POWER_THROTTLING_STATE_FB st;
-    ZeroMemory(&st, sizeof(st));
-    st.Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION;
-    st.ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED;
-    st.StateMask = 0;
-    eco = SetProcessInformation(h, ProcessPowerThrottling, &st, sizeof(st)) != FALSE;
-#endif
+    {
+        typedef BOOL (WINAPI* SetProcInfoFn)(HANDLE, DWORD, LPVOID, DWORD);
+        static SetProcInfoFn pfn = NULL;
+        static bool done = false;
+        if (!done) {
+            done = true;
+            HMODULE k = GetModuleHandleW(L"kernel32.dll");
+            if (k) pfn = (SetProcInfoFn)GetProcAddress(k, "SetProcessInformation");
+        }
+        if (pfn) {
+            struct ThrottleState { ULONG Version, ControlMask, StateMask; };
+            ThrottleState st = {1, 1, 0}; // want full speed, no eco throttling
+            eco = pfn(h, 4 /*ProcessPowerThrottling*/, &st, sizeof(st)) != FALSE;
+        }
+    }
     CloseHandle(h);
     if (fa) {
         msg = WFormat(L"اولویت پردازش %u: %s | حالت کم‌مصرف: %s",

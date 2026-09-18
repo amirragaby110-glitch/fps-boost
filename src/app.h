@@ -1,7 +1,7 @@
 // FPS Booster Pro - Shared header
 #pragma once
 
-#define APP_VER L"3.2.1"
+#define APP_VER L"4.0.0"
 #define HOTKEY_BOOST_ID 1
 
 #define UNICODE
@@ -26,7 +26,7 @@
 #include "strings.h"
 
 // ---------- App constants ----------
-#define APP_VERSION       L"3.2.1"
+#define APP_VERSION       L"4.0.0"
 #define APP_MUTEX         L"Global\\FPSBoosterPro_Mutex_v1"
 #define RES_ICON_APP      101
 #define RES_PNG_LOGO      201
@@ -78,6 +78,7 @@ enum CtrlId {
     IDC_S_CPU = 700, IDC_S_RAM, IDC_S_UPTIME, IDC_S_TIMER,
     IDC_S_GRAPH, IDC_S_CLEANRAM, IDC_S_CLEANTEMP, IDC_S_REFRESH,
     IDC_S_RES = 708, IDC_S_RESAPPLY, IDC_S_RESNATIVE, IDC_S_COPY,
+    IDC_S_HWINFO = 712,
     // help
     IDC_H_TEXT = 800,
     // settings
@@ -236,6 +237,40 @@ public:
 int  RamUsagePercent();
 int  RamAvailMB();
 int  RamTotalMB();
+// Live monitoring (mon.cpp) - real data only, -1/empty == not available
+enum { MON_CPU = 0, MON_GPU, MON_RAM, MON_DISK, MON_NET, MON_PING };
+void MonInit();
+void MonShutdown();
+void MonSample();
+int  MonCpu();
+int  MonCpuMhz();
+int  MonCpuBaseMhz();
+int  MonCpuTempC();
+int  MonCpuCores();
+int  MonCpuThreads();
+int  MonGpu();
+int  MonGpuTempC();
+int  MonGpuClockMhz();
+int  MonGpuPowerW();
+int  MonGpuFanPct();
+int  MonGpuMemUsedMB();
+int  MonGpuMemTotalMB();
+std::wstring MonGpuDriver();
+int  MonRam();
+int  MonRamAvailMB();
+int  MonRamCachedMB();
+int  MonRamSpeedMHz();
+std::wstring MonRamType();
+int  MonDisk();
+int  MonDiskFreeGB();
+int  MonDownKBs();
+int  MonUpKBs();
+int  MonPingMs();
+int  MonHistN();
+int  MonHistGet(int id, int* out90);
+void MonMinMaxAvg(int id, int* mn, int* mx, int* avg);
+std::wstring MonDrives();
+std::wstring MonDisplay();
 // Power
 bool     PowerGetActiveGuid(GUID& g);
 std::wstring PowerGetName(const GUID& g);

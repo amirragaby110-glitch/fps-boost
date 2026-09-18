@@ -104,6 +104,7 @@ int main() {
         return 1;
     }
     UI_TrayInit();
+    MonInit();
     if (g_autoBoost) AutoBoostStart(g_hMain);
 
     if (!g_isAdmin) {
@@ -132,6 +133,7 @@ int main() {
     BackupSave();
     UI_TrayRemove();
     if (gdipTok) Gdiplus::GdiplusShutdown(gdipTok);
+    MonShutdown();
     CoUninitialize();
     if (g_mutex) { CloseHandle(g_mutex); g_mutex = NULL; }
     LogW(L"===== FPS Booster Pro exited =====");

@@ -18,9 +18,10 @@ TARGET_SIZE = 100 * 1024 * 1024  # exactly 100 MiB -> Explorer shows "100 MB"
 
 SOURCES = ['main.cpp', 'strings.cpp', 'util.cpp', 'sysinfo.cpp',
            'tweaks.cpp', 'games.cpp', 'ui.cpp', 'power.cpp', 'net.cpp', 'watch.cpp', 'maxfps.cpp',
-           'procboost.cpp']
+           'procboost.cpp', 'mon.cpp']
 LIBS = ['comctl32', 'gdi32', 'gdiplus', 'shell32', 'ole32', 'uuid',
-        'powrprof', 'advapi32', 'comdlg32', 'winhttp', 'iphlpapi', 'dxgi', 'ws2_32', 'psapi']
+        'powrprof', 'advapi32', 'comdlg32', 'winhttp', 'iphlpapi', 'dxgi', 'ws2_32', 'psapi',
+        'oleaut32']
 
 
 def run(cmd, **kw):
@@ -122,39 +123,169 @@ def pad_to_100mb(src, dst):
     print('padded: %d -> %d bytes (%.1f MB)' % (len(data), final, final / 1024 / 1024))
 
 
-SETUP_VER = '3.2.1'
+VER = '4.0.0'
 
-def gen_setup_license():
+
+def w7defs(win7):
+    if not win7:
+        return []
+    return ['-U_WIN32_WINNT', '-D_WIN32_WINNT=0x0601', '-DWIN7_BUILD=1']
+
+
+WIN8PLUS_FUNCS = ['SetProcessInformation', 'GetSystemTimePreciseAsFileTime',
+    'SetThreadDescription', 'GetThreadDescription', 'IsWow64Process2', 'RoInitialize',
+    'RoActivateInstance', 'RoGetActivationFactory', 'WindowsCreateString',
+    'WindowsDeleteString', 'GetDpiForWindow', 'GetDpiForSystem', 'GetSystemDpiForProcess',
+    'GetDpiForMonitor', 'SetProcessDpiAwareness', 'SetProcessDpiAwarenessContext',
+    'GetSystemCpuSetInformation', 'RegisterSuspendResumeNotification',
+    'PowerRegisterSuspendResumeNotification', 'QueryUnbiasedInterruptTime',
+    'CreateDXGIFactory2', 'D3D11CreateDevice', 'D3D11CreateDeviceAndSwapChain',
+    'CreateFile2', 'DiscardVirtualMemory', 'OfferVirtualMemory', 'ReclaimVirtualMemory',
+    'PrefetchVirtualMemory', 'GetProcessInformation']
+
+
+def check_win7_imports(path, strict):
+    """Fail (strict) if the PE statically imports any Win8+ API."""
+    d = open(path, 'rb').read()
+    pe = struct.unpack('<I', d[0x3C:0x40])[0]
+    nsec = struct.unpack('<H', d[pe + 6:pe + 8])[0]
+    optsz = struct.unpack('<H', d[pe + 20:pe + 22])[0]
+    opt = pe + 24
+    sectab = opt + optsz
+    secs = []
+    for i in range(nsec):
+        o = sectab + i * 40
+        vsize, vaddr, rawsize, rawptr = struct.unpack('<IIII', d[o + 8:o + 24])
+        secs.append((vaddr, max(vsize, rawsize), rawptr))
+
+    def rva2off(rva):
+        for va, sz, rp in secs:
+            if va <= rva < va + sz:
+                return rp + (rva - va)
+        return None
+
+    idd = opt + 112 + 8
+    irva, isz = struct.unpack('<II', d[idd:idd + 8])
+    bad = []
+    if irva and isz:
+        off = rva2off(irva)
+        deny = set(x.upper() for x in WIN8PLUS_FUNCS)
+        while True:
+            ilt, ts, fwd, name_rva, iat = struct.unpack('<IIIII', d[off:off + 20])
+            if ilt == ts == fwd == name_rva == iat == 0:
+                break
+            loff = rva2off(ilt)
+            while True:
+                entry = struct.unpack('<Q', d[loff:loff + 8])[0]
+                if entry == 0:
+                    break
+                if not (entry & 0x8000000000000000):
+                    noff = rva2off(entry & 0x7FFFFFFF)
+                    if noff:
+                        end = d.index(b'\0', noff + 2)
+                        nm = d[noff + 2:end].decode('ascii', 'replace')
+                        if nm.upper() in deny:
+                            bad.append(nm)
+                loff += 8
+            off += 20
+    if bad:
+        msg = 'Win8+ static imports found: %s' % ', '.join(sorted(set(bad)))
+        if strict:
+            sys.exit('BUILD FAILED: ' + msg)
+        print('WARNING (modern flavor): ' + msg)
+    else:
+        print('win7 import check: no Win8+ static imports.')
+
+
+
+def patch_win7_imports(path):
+    NUL = bytes([0])
+    old = b'GetSystemTimePreciseAsFileTime'
+    new = b'GetSystemTimeAsFileTime'
+    assert len(new) < len(old)
+    d = bytearray(open(path, 'rb').read())
+    pe = struct.unpack('<I', d[0x3C:0x40])[0]
+    nsec = struct.unpack('<H', d[pe + 6:pe + 8])[0]
+    optsz = struct.unpack('<H', d[pe + 20:pe + 22])[0]
+    opt = pe + 24
+    sectab = opt + optsz
+    secs = []
+    for i in range(nsec):
+        o = sectab + i * 40
+        vsize, vaddr, rawsize, rawptr = struct.unpack('<IIII', d[o + 8:o + 24])
+        secs.append((vaddr, max(vsize, rawsize), rawptr))
+
+    def rva2off(rva):
+        for va, sz, rp in secs:
+            if va <= rva < va + sz:
+                return rp + (rva - va)
+        return None
+
+    idd = opt + 112 + 8
+    irva, isz = struct.unpack('<II', d[idd:idd + 8])
+    count = 0
+    if irva and isz:
+        off = rva2off(irva)
+        while True:
+            ilt, ts, fwd, name_rva, iat = struct.unpack('<IIIII', d[off:off + 20])
+            if ilt == ts == fwd == name_rva == iat == 0:
+                break
+            loff = rva2off(ilt)
+            while True:
+                entry = struct.unpack('<Q', d[loff:loff + 8])[0]
+                if entry == 0:
+                    break
+                if not (entry & 0x8000000000000000):
+                    noff = rva2off(entry & 0x7FFFFFFF)
+                    if noff:
+                        end = d.index(NUL, noff + 2)
+                        nm = bytes(d[noff + 2:end])
+                        if nm.upper() == old.upper():
+                            d[noff + 2:noff + 2 + len(new)] = new
+                            pad = len(old) - len(new)
+                            d[noff + 2 + len(new):noff + 2 + len(old)] = NUL * pad
+                            count += 1
+                loff += 8
+            off += 20
+    if count:
+        open(path, 'wb').write(d)
+    print('win7 import patch: replaced %d import(s)' % count)
+    return count
+
+def gen_setup_license(bdir):
     text = open(os.path.join(ROOT, 'LICENSE'), encoding='utf-8').read().strip()
     esc = text.replace(chr(92), chr(92) * 2).replace(chr(34), chr(92) + chr(34))
     esc = esc.replace(chr(13) + chr(10), chr(10)).replace(chr(10), chr(92) + 'r' + chr(92) + 'n')
     h = '// generated by build.py - do not edit' + chr(10)
     h += 'static const char* kSetupLicenseUtf8 = ' + chr(34) + esc + chr(34) + ';' + chr(10)
-    open(os.path.join(BUILD, 'setup_license.h'), 'w', encoding='utf-8').write(h)
+    open(os.path.join(bdir, 'setup_license.h'), 'w', encoding='utf-8').write(h)
 
 
-def build_setup(payload):
-    gen_setup_license()
-    raw = os.path.join(BUILD, 'setup_raw.exe')
+def build_setup(payload, bdir, win7):
+    gen_setup_license(bdir)
+    raw = os.path.join(bdir, 'setup_raw.exe')
     cmd = [sys.executable, '-m', 'ziglang', 'c++', '-target', 'x86_64-windows-gnu',
            '-O2', '-DUNICODE', '-D_UNICODE', '-Wno-nullability-completeness', '-municode', '-mwindows',
-           '-Isrc', '-Ibuild', '-o', raw, os.path.join('src', 'setup.cpp')]
+           '-Isrc', '-I' + bdir] + w7defs(win7) + ['-o', raw, os.path.join('src', 'setup.cpp')]
     for lib in ['shell32', 'ole32', 'uuid', 'comctl32', 'gdi32']:
         cmd.append('-l' + lib)
     run(cmd)
-    stub = os.path.join(BUILD, 'setup_stub.exe')
+    stub = os.path.join(bdir, 'setup_stub.exe')
     run([sys.executable, 'tools/inject_resources.py', raw, stub,
          '--icon', 'assets/icon.ico', '--manifest', 'res/setup.manifest',
          '--logo', 'assets/logo_ui.png', '--banner', 'assets/banner_ui.png',
          '--bg', 'assets/bg_ui.png',
-         '--db', 'data/games_db.json', '--ver', SETUP_VER])
+         '--db', 'data/games_db.json', '--ver', VER])
+    if win7:
+        patch_win7_imports(stub)
     # layout: [stub][payload][zeros][footer64] == exactly 100 MB
     stub_data = open(stub, 'rb').read()
     pay_data = open(payload, 'rb').read()
     magic = b'FPSBOOSTERSETUP1'.ljust(32, b'\0')
     footer = magic + struct.pack('<QQQ', len(stub_data), len(pay_data), 1)
     footer = footer.ljust(64, b'\0')
-    out = os.path.join(RELEASE, 'FPSBooster-Setup-v%s.exe' % SETUP_VER)
+    sfx = '-Win7' if win7 else ''
+    out = os.path.join(RELEASE, 'FPSBooster-Setup%s-v%s.exe' % (sfx, VER))
     with open(out, 'wb') as f:
         f.write(stub_data)
         f.write(pay_data)
@@ -169,7 +300,7 @@ def build_setup(payload):
     assert os.path.getsize(out) == TARGET_SIZE, os.path.getsize(out)
     pe_checksum_write(out)
     print('setup: stub %d + payload %d -> %d bytes' % (len(stub_data), len(pay_data), TARGET_SIZE))
-    zpath = os.path.join(RELEASE, 'FPSBooster-Setup-v%s.zip' % SETUP_VER)
+    zpath = os.path.join(RELEASE, 'FPSBooster-Setup%s-v%s.zip' % (sfx, VER))
     with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         z.write(out, os.path.basename(out))
     print('setup zip: %.2f MB' % (os.path.getsize(zpath) / 1024 / 1024))
@@ -177,44 +308,51 @@ def build_setup(payload):
 
 
 def main():
-    os.makedirs(BUILD, exist_ok=True)
+    win7 = '--win7' in sys.argv
+    bdir = os.path.join(ROOT, 'build-win7' if win7 else 'build')
+    os.makedirs(bdir, exist_ok=True)
     os.makedirs(RELEASE, exist_ok=True)
+    print('flavor: %s' % ('Windows 7 legacy' if win7 else 'modern (Win10/11)'))
 
     print('=== [1/6] assets ===')
     run([sys.executable, 'tools/make_assets.py'])
 
     print('=== [2/6] compile (Zig -> Windows x64) ===')
-    raw = os.path.join(BUILD, 'fpsbooster_raw.exe')
+    raw = os.path.join(bdir, 'fpsbooster_raw.exe')
     cmd = [sys.executable, '-m', 'ziglang', 'c++', '-target', 'x86_64-windows-gnu',
            '-O2', '-DUNICODE', '-D_UNICODE', '-Wno-nullability-completeness',
-           '-Isrc', '-o', raw] + [os.path.join('src', s) for s in SOURCES]
+           '-Isrc'] + w7defs(win7) + ['-o', raw] + [os.path.join('src', s) for s in SOURCES]
     for lib in LIBS:
         cmd.append('-l' + lib)
     run(cmd)
 
     print('=== [3/6] inject resources ===')
-    full = os.path.join(BUILD, 'fpsbooster_full.exe')
+    full = os.path.join(bdir, 'fpsbooster_full.exe')
     run([sys.executable, 'tools/inject_resources.py', raw, full,
          '--icon', 'assets/icon.ico', '--manifest', 'res/app.manifest',
          '--logo', 'assets/logo_ui.png', '--banner', 'assets/banner_ui.png',
          '--bg', 'assets/bg_ui.png',
-         '--db', 'data/games_db.json', '--ver', '3.2.1'])
+         '--db', 'data/games_db.json', '--ver', VER])
 
     print('=== [4/6] PE checks + pad to 100 MB ===')
     check_imports(full)
-    exe = os.path.join(RELEASE, 'fpsbooster.exe')
+    if win7:
+        patch_win7_imports(full)
+    check_win7_imports(full, strict=win7)
+    exe = os.path.join(RELEASE, 'fpsbooster-win7.exe' if win7 else 'fpsbooster.exe')
     pad_to_100mb(full, exe)
     pe_checksum_write(exe)
 
     print('=== [5/6] portable zip ===')
-    zpath = os.path.join(RELEASE, 'FPSBooster-v3.2.1-Portable.zip')
+    zpath = os.path.join(RELEASE, 'FPSBooster-Win7-v%s-Portable.zip' % VER if win7
+                        else 'FPSBooster-v%s-Portable.zip' % VER)
     with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         z.write(exe, 'fpsbooster.exe')
         z.write(os.path.join(ROOT, 'README.md'), 'README.md')
     print('zip: %.2f MB' % (os.path.getsize(zpath) / 1024 / 1024))
 
     print('=== [6/6] setup installer (100 MB) ===')
-    setup_exe, setup_zip = build_setup(full)
+    setup_exe, setup_zip = build_setup(full, bdir, win7)
 
     print()
     print('BUILD OK')
